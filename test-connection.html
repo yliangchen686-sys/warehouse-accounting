@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase 连接测试</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Supabase 连接测试</h1>
+    <button onclick="testConnection()">测试连接</button>
+    <button onclick="checkUsers()">检查用户数据</button>
+    <div id="result"></div>
+
+    <script>
+        const supabaseUrl = 'https://ztyvmtawslpmjqffbmtp.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0eXZtdGF3c2xwbWpxZmZibXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTg0NjAsImV4cCI6MjA3NDAzNDQ2MH0.XY-fszdxHZFmMohKhP7q_pEBj1L7TRceldZ3-mu3Dl4';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        async function testConnection() {
+            const result = document.getElementById('result');
+            result.innerHTML = '正在测试连接...';
+            
+            try {
+                const { data, error } = await supabase
+                    .from('employees')
+                    .select('count');
+                
+                if (error) {
+                    result.innerHTML = `<p style="color: red;">连接失败: ${error.message}</p>`;
+                } else {
+                    result.innerHTML = `<p style="color: green;">连接成功！</p>`;
+                }
+            } catch (err) {
+                result.innerHTML = `<p style="color: red;">错误: ${err.message}</p>`;
+            }
+        }
+
+        async function checkUsers() {
+            const result = document.getElementById('result');
+            result.innerHTML = '正在检查用户数据...';
+            
+            try {
+                const { data, error } = await supabase
+                    .from('employees')
+                    .select('*');
+                
+                if (error) {
+                    result.innerHTML = `<p style="color: red;">查询失败: ${error.message}</p>`;
+                } else {
+                    result.innerHTML = `
+                        <p style="color: green;">查询成功！找到 ${data.length} 个用户:</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (err) {
+                result.innerHTML = `<p style="color: red;">错误: ${err.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
