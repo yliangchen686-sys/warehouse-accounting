@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons';
 import { transactionService } from '../../services/transactionService';
 import { employeePaymentService } from '../../services/employeePaymentService';
+import { customerService } from '../../services/customerService';
 import { transactionTypes } from '../../config/supabase';
 import dayjs from 'dayjs';
 
@@ -46,11 +47,13 @@ const EmployeeTransactionList = ({ user }) => {
   const [stats, setStats] = useState(null);
   const [paymentStats, setPaymentStats] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [customerBindings, setCustomerBindings] = useState({});
 
   useEffect(() => {
     loadTransactions();
     loadStats();
     loadPaymentStats();
+    loadCustomerBindings();
 
     // 设置自动刷新
     let interval;
@@ -59,6 +62,7 @@ const EmployeeTransactionList = ({ user }) => {
         loadTransactions();
         loadStats();
         loadPaymentStats();
+        loadCustomerBindings();
       }, 30000); // 每30秒刷新一次
     }
 
@@ -80,9 +84,14 @@ const EmployeeTransactionList = ({ user }) => {
       };
 
       const allData = await transactionService.getTransactions(filterParams);
-      // 只显示该员工的交易记录
+      
+      // 获取该员工绑定的客户列表
+      const employeeCustomers = await customerService.getEmployeeCustomers(user.name);
+      const customerNames = employeeCustomers.map(c => c.customer_name);
+      
+      // 显示该员工名下所有客户的交易记录
       const employeeTransactions = allData.filter(transaction => 
-        transaction.collector === user.name
+        customerNames.includes(transaction.customer_name)
       );
       
       setTransactions(employeeTransactions);
@@ -106,9 +115,13 @@ const EmployeeTransactionList = ({ user }) => {
         endDate: endOfMonth
       });
       
-      // 只统计该员工的本月销售数量
+      // 获取该员工绑定的客户列表
+      const employeeCustomers = await customerService.getEmployeeCustomers(user.name);
+      const customerNames = employeeCustomers.map(c => c.customer_name);
+      
+      // 统计该员工名下所有客户的本月销售数量
       const employeeSales = allData.filter(transaction => 
-        transaction.collector === user.name && transaction.type === 'sale'
+        customerNames.includes(transaction.customer_name) && transaction.type === 'sale'
       );
       
       const monthlyStats = {
@@ -128,6 +141,19 @@ const EmployeeTransactionList = ({ user }) => {
       setPaymentStats(paymentData);
     } catch (error) {
       console.error('加载收款统计失败:', error);
+    }
+  };
+
+  const loadCustomerBindings = async () => {
+    try {
+      const bindings = await customerService.getAllCustomerBindings();
+      const bindingMap = {};
+      bindings.forEach(binding => {
+        bindingMap[binding.customer_name] = binding.employee_name;
+      });
+      setCustomerBindings(bindingMap);
+    } catch (error) {
+      console.error('加载客户绑定失败:', error);
     }
   };
 
@@ -197,6 +223,21 @@ const EmployeeTransactionList = ({ user }) => {
       title: '收款员工',
       dataIndex: 'collector',
       key: 'collector',
+      ellipsis: true,
+      width: 100
+    },
+    {
+      title: '绑定员工',
+      dataIndex: 'customer_name',
+      key: 'bound_employee',
+      render: (customerName) => {
+        const boundEmployee = customerBindings[customerName];
+        return boundEmployee ? (
+          <Tag color="blue">{boundEmployee}</Tag>
+        ) : (
+          <Tag color="default">未绑定</Tag>
+        );
+      },
       ellipsis: true,
       width: 100
     },

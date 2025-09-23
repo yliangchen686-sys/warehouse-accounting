@@ -22,6 +22,7 @@ import {
   FilterOutlined
 } from '@ant-design/icons';
 import { transactionService } from '../../services/transactionService';
+import { customerService } from '../../services/customerService';
 import { transactionTypes } from '../../config/supabase';
 import TransactionForm from './TransactionForm';
 import dayjs from 'dayjs';
@@ -45,10 +46,12 @@ const TransactionList = () => {
     total: 0
   });
   const [stats, setStats] = useState(null);
+  const [customerBindings, setCustomerBindings] = useState({});
 
   useEffect(() => {
     loadTransactions();
     loadStats();
+    loadCustomerBindings();
   }, [filters, pagination.current, pagination.pageSize]);
 
   const loadTransactions = async () => {
@@ -82,6 +85,19 @@ const TransactionList = () => {
       setStats(statsData);
     } catch (error) {
       console.error('加载统计数据失败:', error);
+    }
+  };
+
+  const loadCustomerBindings = async () => {
+    try {
+      const bindings = await customerService.getAllCustomerBindings();
+      const bindingMap = {};
+      bindings.forEach(binding => {
+        bindingMap[binding.customer_name] = binding.employee_name;
+      });
+      setCustomerBindings(bindingMap);
+    } catch (error) {
+      console.error('加载客户绑定失败:', error);
     }
   };
 
@@ -180,6 +196,21 @@ const TransactionList = () => {
       title: '收款员工',
       dataIndex: 'collector',
       key: 'collector',
+      ellipsis: true,
+      width: 100
+    },
+    {
+      title: '绑定员工',
+      dataIndex: 'customer_name',
+      key: 'bound_employee',
+      render: (customerName) => {
+        const boundEmployee = customerBindings[customerName];
+        return boundEmployee ? (
+          <Tag color="blue">{boundEmployee}</Tag>
+        ) : (
+          <Tag color="default">未绑定</Tag>
+        );
+      },
       ellipsis: true,
       width: 100
     },
