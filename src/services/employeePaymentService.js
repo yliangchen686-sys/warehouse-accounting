@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { authService } from './authService';
 import { withdrawalService } from './withdrawalService';
+import { customerService } from './customerService';
 
 class EmployeePaymentService {
   // 获取员工收款统计
@@ -32,68 +33,125 @@ class EmployeePaymentService {
         });
       }
 
-      // 如果指定了员工名称，只统计该员工的收款
-      if (employeeName) {
-        allTransactions = allTransactions.filter(t => t.collector === employeeName);
-      }
+      // 获取所有客户绑定关系
+      const customerBindings = await customerService.getAllCustomerBindings();
+      const bindingsMap = {};
+      customerBindings.forEach(binding => {
+        bindingsMap[binding.customer_name] = binding.employee_name;
+      });
 
-      // 按员工分组统计收款
+      // 按员工分组统计收款（根据客户绑定关系，而不是收款人）
       const employeeStats = {};
-      
+
       allTransactions.forEach(transaction => {
-        const collector = transaction.collector;
+        // 获取该交易客户的绑定员工
+        const boundEmployee = bindingsMap[transaction.customer_name];
+
+        // 如果没有绑定员工，跳过该交易（或者可以记录到"未绑定"分类）
+        if (!boundEmployee) {
+          return;
+        }
+
+        // 如果指定了员工名称，只统计该员工的交易
+        if (employeeName && boundEmployee !== employeeName) {
+          return;
+        }
+
         const amount = parseFloat(transaction.total_amount) || 0;
         const type = transaction.type;
-        
-        if (!employeeStats[collector]) {
-          employeeStats[collector] = {
-            employeeName: collector,
+
+        if (!employeeStats[boundEmployee]) {
+          employeeStats[boundEmployee] = {
+            employeeName: boundEmployee,
             totalAmount: 0,
             transactionCount: 0,
             transactions: []
           };
         }
-        
+
         // 修改收款计算逻辑：销售收款 - 回收金额
         if (type === 'sale') {
           // 销售：增加收款金额
-          employeeStats[collector].totalAmount += amount;
+          employeeStats[boundEmployee].totalAmount += amount;
         } else if (type === 'return') {
           // 回收：减少收款金额
-          employeeStats[collector].totalAmount -= amount;
+          employeeStats[boundEmployee].totalAmount -= amount;
         }
         // 进货和赠送不计入员工收款
-        
-        employeeStats[collector].transactionCount++;
-        employeeStats[collector].transactions.push(transaction);
+
+        employeeStats[boundEmployee].transactionCount++;
+        employeeStats[boundEmployee].transactions.push(transaction);
       });
 
       // 获取员工转账记录
       const transfers = await this.getEmployeeTransfers();
       
-      // 获取商人的提现金额
-      const totalWithdrawals = await withdrawalService.getTotalWithdrawals();
+      // 获取所有提现记录
+      const allWithdrawals = await withdrawalService.getMerchantWithdrawals();
 
       // 计算每个员工的实际余额（收款总额 - 已转账金额）
       Object.keys(employeeStats).forEach(employeeName => {
         const employeeTransfers = transfers.filter(t => t.employee_name === employeeName);
         const totalTransferred = employeeTransfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
         
-        employeeStats[employeeName].totalTransferred = totalTransferred;
+        // 计算该员工的提现金额
+        const employeeWithdrawals = allWithdrawals.filter(w => w.merchant_name === employeeName);
+        const totalWithdrawn = employeeWithdrawals.reduce((sum, w) => sum + parseFloat(w.amount), 0);
         
-        // 特殊处理商人的收款计算
-        if (employeeName === '商人' || employeeName === '系统管理员') {
-          // 商人收款 = 销售收款 + 员工转账收款 - 回收收款
-          const allEmployeeTransfers = transfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-          employeeStats[employeeName].totalAmount += allEmployeeTransfers; // 加上所有员工转账
-          
-          // 计算商人的提现金额
-          employeeStats[employeeName].totalWithdrawn = totalWithdrawals;
-          employeeStats[employeeName].currentBalance = employeeStats[employeeName].totalAmount - totalWithdrawals;
-          employeeStats[employeeName].totalTransferred = 0; // 商人不需要转账
+        // 获取员工角色信息来判断是否为管理员或商人
+        const isAdmin = employeeName === '管理员' || employeeName === '系统管理员';
+        const isMerchant = employeeName === '商人' || (employeeName && employeeName !== '管理员' && employeeName !== '系统管理员' && totalWithdrawn > 0);
+        
+        // 特殊处理管理员和商人的收款计算
+        if (isAdmin || isMerchant) {
+          if (isAdmin) {
+            // 管理员：当前余额 = 销售收款 + 员工转账收款 + 商人转账收款 - 回收金额 - 提现金额
+            const allEmployeeTransfers = transfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+            const salesAmount = employeeStats[employeeName].totalAmount; // 销售收款 - 回收金额
+            const totalIncome = salesAmount + allEmployeeTransfers; // 总收入
+            
+            employeeStats[employeeName].totalAmount = totalIncome;
+            employeeStats[employeeName].totalWithdrawn = totalWithdrawn;
+            employeeStats[employeeName].currentBalance = totalIncome - totalWithdrawn;
+            employeeStats[employeeName].totalTransferred = 0; // 管理员不需要转账
+            
+            console.log(`管理员 ${employeeName} 余额计算:`, {
+              salesAmount,
+              allEmployeeTransfers,
+              totalIncome,
+              totalWithdrawn,
+              currentBalance: totalIncome - totalWithdrawn
+            });
+          } else if (isMerchant) {
+            // 商人：当前余额 = 销售收款 - 回收金额 - 转账金额 - 提现金额
+            const salesAmount = employeeStats[employeeName].totalAmount; // 销售收款 - 回收金额
+            const currentBalance = salesAmount - totalTransferred - totalWithdrawn;
+            
+            console.log(`商人 ${employeeName} 余额计算:`, {
+              salesAmount,
+              totalTransferred,
+              totalWithdrawn,
+              currentBalance
+            });
+            
+            // 设置商人的转账金额、提现金额和余额
+            employeeStats[employeeName].totalTransferred = totalTransferred;
+            employeeStats[employeeName].totalWithdrawn = totalWithdrawn;
+            employeeStats[employeeName].currentBalance = currentBalance;
+          }
         } else {
-          // 普通员工的余额计算
-          employeeStats[employeeName].currentBalance = employeeStats[employeeName].totalAmount - totalTransferred;
+          // 普通员工的余额计算 - 转账后余额应该减少
+          const originalAmount = employeeStats[employeeName].totalAmount;
+          const currentBalance = originalAmount - totalTransferred;
+          
+          console.log(`员工 ${employeeName} 余额计算:`, {
+            originalAmount,
+            totalTransferred,
+            currentBalance
+          });
+          
+          employeeStats[employeeName].totalTransferred = totalTransferred;
+          employeeStats[employeeName].currentBalance = currentBalance;
           employeeStats[employeeName].totalWithdrawn = 0; // 员工不能提现
         }
         
@@ -107,10 +165,10 @@ class EmployeePaymentService {
     }
   }
 
-  // 员工向商人转账
+  // 员工向管理员转账
   async transferToMerchant(transferData) {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以记录转账');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以记录转账');
     }
 
     try {
@@ -189,6 +247,18 @@ class EmployeePaymentService {
     try {
       const stats = await this.getEmployeePaymentStats();
       
+      // 获取员工角色信息
+      const { data: employees } = await supabase
+        .from('employees')
+        .select('name, role');
+      
+      const employeeRoles = {};
+      if (employees) {
+        employees.forEach(emp => {
+          employeeRoles[emp.name] = emp.role;
+        });
+      }
+      
       // 转换为数组格式，方便表格显示
       const summary = Object.values(stats).map(employee => ({
         employeeName: employee.employeeName,
@@ -196,7 +266,8 @@ class EmployeePaymentService {
         totalTransferred: employee.totalTransferred || 0,
         totalWithdrawn: employee.totalWithdrawn || 0, // 添加提现金额
         currentBalance: employee.currentBalance || employee.totalAmount,
-        transactionCount: employee.transactionCount
+        transactionCount: employee.transactionCount,
+        role: employeeRoles[employee.employeeName] || 'employee' // 添加角色信息
       }));
 
       // 按当前余额排序

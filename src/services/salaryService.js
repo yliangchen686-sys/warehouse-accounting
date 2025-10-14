@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { transactionService } from './transactionService';
+import { customerService } from './customerService';
 import dayjs from 'dayjs';
 
 class SalaryService {
@@ -29,12 +30,22 @@ class SalaryService {
         endDate: endDate.toISOString()
       });
 
-      // 筛选该员工收款的交易
-      const employeeTransactions = transactions.filter(t => t.collector === employeeName);
+      // 获取所有客户绑定关系
+      const customerBindings = await customerService.getAllCustomerBindings();
+      const bindingsMap = {};
+      customerBindings.forEach(binding => {
+        bindingsMap[binding.customer_name] = binding.employee_name;
+      });
+
+      // 筛选该员工绑定客户的交易（按绑定人统计，而不是收款人）
+      const employeeTransactions = transactions.filter(t => {
+        const boundEmployee = bindingsMap[t.customer_name];
+        return boundEmployee === employeeName;
+      });
 
       // 计算销售数量（只计算销售类型，不包括赠送数量）
       let totalSalesQuantity = 0;
-      
+
       employeeTransactions.forEach(transaction => {
         if (transaction.type === 'sale') {
           // 销售数量 = 实际销售数量（不包括赠送数量）
