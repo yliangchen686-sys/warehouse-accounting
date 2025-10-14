@@ -1,7 +1,6 @@
 import { supabase } from '../config/supabase';
 import { authService } from './authService';
 import { withdrawalService } from './withdrawalService';
-import { customerService } from './customerService';
 
 class EmployeePaymentService {
   // 获取员工收款统计
@@ -33,36 +32,22 @@ class EmployeePaymentService {
         });
       }
 
-      // 获取所有客户绑定关系
-      const customerBindings = await customerService.getAllCustomerBindings();
-      const bindingsMap = {};
-      customerBindings.forEach(binding => {
-        bindingsMap[binding.customer_name] = binding.employee_name;
-      });
+      // 如果指定了员工名称，只统计该员工的收款
+      if (employeeName) {
+        allTransactions = allTransactions.filter(t => t.collector === employeeName);
+      }
 
-      // 按员工分组统计收款（根据客户绑定关系，而不是收款人）
+      // 按员工分组统计收款（按收款人统计）
       const employeeStats = {};
 
       allTransactions.forEach(transaction => {
-        // 获取该交易客户的绑定员工
-        const boundEmployee = bindingsMap[transaction.customer_name];
-
-        // 如果没有绑定员工，跳过该交易（或者可以记录到"未绑定"分类）
-        if (!boundEmployee) {
-          return;
-        }
-
-        // 如果指定了员工名称，只统计该员工的交易
-        if (employeeName && boundEmployee !== employeeName) {
-          return;
-        }
-
+        const collector = transaction.collector;
         const amount = parseFloat(transaction.total_amount) || 0;
         const type = transaction.type;
 
-        if (!employeeStats[boundEmployee]) {
-          employeeStats[boundEmployee] = {
-            employeeName: boundEmployee,
+        if (!employeeStats[collector]) {
+          employeeStats[collector] = {
+            employeeName: collector,
             totalAmount: 0,
             transactionCount: 0,
             transactions: []
@@ -72,15 +57,15 @@ class EmployeePaymentService {
         // 修改收款计算逻辑：销售收款 - 回收金额
         if (type === 'sale') {
           // 销售：增加收款金额
-          employeeStats[boundEmployee].totalAmount += amount;
+          employeeStats[collector].totalAmount += amount;
         } else if (type === 'return') {
           // 回收：减少收款金额
-          employeeStats[boundEmployee].totalAmount -= amount;
+          employeeStats[collector].totalAmount -= amount;
         }
         // 进货和赠送不计入员工收款
 
-        employeeStats[boundEmployee].transactionCount++;
-        employeeStats[boundEmployee].transactions.push(transaction);
+        employeeStats[collector].transactionCount++;
+        employeeStats[collector].transactions.push(transaction);
       });
 
       // 获取员工转账记录
