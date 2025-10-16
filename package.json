@@ -1,6 +1,6 @@
 {
   "name": "warehouse-accounting",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "仓储记账软件 - 商人端和员工端",
   "author": "仓储记账系统开发团队",
   "main": "public/electron.js",
@@ -45,7 +45,7 @@
     "files": [
       "build/**/*",
       "public/electron.js",
-      "!node_modules/**/*"
+      "node_modules/electron-updater/**/*"
     ],
     "win": {
       "target": [
