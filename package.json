@@ -17,32 +17,62 @@
     "eject": "react-scripts eject"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.2.6",
     "@supabase/supabase-js": "^2.38.0",
+    "antd": "^5.12.8",
+    "bcryptjs": "^2.4.3",
+    "dayjs": "^1.11.10",
+    "electron-updater": "^6.6.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.8.0",
-    "react-scripts": "5.0.1",
-    "antd": "^5.12.8",
-    "dayjs": "^1.11.10",
-    "bcryptjs": "^2.4.3",
-    "@ant-design/icons": "^5.2.6"
+    "react-scripts": "5.0.1"
   },
   "devDependencies": {
+    "concurrently": "^7.6.0",
+    "cross-env": "^10.0.0",
     "electron": "^22.0.0",
     "electron-builder": "^24.0.0",
-    "concurrently": "^7.6.0",
     "wait-on": "^7.0.1"
   },
   "build": {
     "appId": "com.warehouse.accounting",
     "productName": "仓储记账系统",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "build/**/*",
-      "node_modules/**/*",
-      "public/electron.js"
+      "public/electron.js",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "仓储记账系统"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "yliangchen686-sys",
+        "repo": "warehouse-accounting",
+        "releaseType": "release"
+      }
     ]
   },
   "browserslist": {
