@@ -1,18 +1,20 @@
 import { supabase } from '../config/supabase';
 import { authService } from './authService';
 import { withdrawalService } from './withdrawalService';
+import { inventoryService } from './inventoryService';
 
 class TransactionService {
-  // 创建交易记录（仅商人可用）
+  // 创建交易记录（仅商人或管理员可用）
   async createTransaction(transactionData) {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以创建交易记录');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以创建交易记录');
     }
 
     try {
       const transactionRecord = {
         type: transactionData.type,
         customer_name: transactionData.customerName,
+        product_name: transactionData.productName,
         collector: transactionData.collector,
         quantity: parseFloat(transactionData.quantity) || 0,
         gift_quantity: parseFloat(transactionData.giftQuantity) || 0,
@@ -27,39 +29,54 @@ class TransactionService {
 
       if (error) {
         console.warn('数据库插入失败，使用本地存储:', error);
-        
+
         // 如果数据库插入失败，保存到本地存储
         const existingTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
         const nextId = -(existingTransactions.length + 1); // 使用负数 ID
-        
+
         const localTransaction = {
           ...transactionRecord,
           id: nextId, // 使用负数 ID 标识本地交易
           created_at: new Date().toISOString()
         };
-        
+
         // 保存到本地存储
         existingTransactions.push(localTransaction);
         localStorage.setItem('localTransactions', JSON.stringify(existingTransactions));
-        
-        // 移除库存管理功能
-        
+
         return localTransaction;
       }
 
-      // 移除库存管理功能
-      
+      // 自动更新库存
+      if (data && data[0]) {
+        try {
+          await inventoryService.handleTransactionStock(
+            {
+              type: transactionData.type,
+              productName: transactionData.productName,
+              quantity: transactionData.quantity,
+              giftQuantity: transactionData.giftQuantity
+            },
+            data[0].id
+          );
+        } catch (inventoryError) {
+          console.error('库存更新失败:', inventoryError);
+          // 库存更新失败不影响交易记录创建
+        }
+      }
+
       return data[0];
     } catch (error) {
       console.error('创建交易记录失败:', error);
-      
+
       // 完全失败时，仍然尝试保存到本地
       const existingTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
       const nextId = -(existingTransactions.length + 1); // 使用负数 ID
-      
+
       const localTransaction = {
         type: transactionData.type,
         customer_name: transactionData.customerName,
+        product_name: transactionData.productName,
         collector: transactionData.collector,
         quantity: parseFloat(transactionData.quantity) || 0,
         gift_quantity: parseFloat(transactionData.giftQuantity) || 0,
@@ -68,27 +85,26 @@ class TransactionService {
         id: nextId,
         created_at: new Date().toISOString()
       };
-      
+
       const allTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
       allTransactions.push(localTransaction);
       localStorage.setItem('localTransactions', JSON.stringify(allTransactions));
-      
-      // 移除库存管理功能
-      
+
       return localTransaction;
     }
   }
 
-  // 更新交易记录（仅商人可用）
+  // 更新交易记录（仅商人或管理员可用）
   async updateTransaction(transactionId, updateData) {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以更新交易记录');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以更新交易记录');
     }
 
     try {
       const updates = {};
       if (updateData.type) updates.type = updateData.type;
       if (updateData.customerName) updates.customer_name = updateData.customerName;
+      if (updateData.productName !== undefined) updates.product_name = updateData.productName;
       if (updateData.collector) updates.collector = updateData.collector;
       if (updateData.quantity !== undefined) updates.quantity = parseFloat(updateData.quantity) || 0;
       if (updateData.giftQuantity !== undefined) updates.gift_quantity = parseFloat(updateData.giftQuantity) || 0;
@@ -112,10 +128,10 @@ class TransactionService {
     }
   }
 
-  // 删除交易记录（仅商人可用）
+  // 删除交易记录（仅商人或管理员可用）
   async deleteTransaction(transactionId) {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以删除交易记录');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以删除交易记录');
     }
 
     try {
@@ -142,39 +158,85 @@ class TransactionService {
 
       // 尝试从数据库获取数据
       try {
-        let query = supabase
-          .from('transactions')
-          .select('*');
-
-        // 应用筛选条件
-        if (filters.type) {
-          query = query.eq('type', filters.type);
-        }
-
-        if (filters.customerName) {
-          query = query.ilike('customer_name', `%${filters.customerName}%`);
-        }
-
-        if (filters.startDate) {
-          query = query.gte('created_at', filters.startDate);
-        }
-
-        if (filters.endDate) {
-          query = query.lte('created_at', filters.endDate);
-        }
-
-        // 按创建时间倒序排列
-        query = query.order('created_at', { ascending: false });
-
-        // 限制返回数量
+        // 如果指定了 limit，直接查询
         if (filters.limit) {
+          let query = supabase
+            .from('transactions')
+            .select('*');
+
+          // 应用筛选条件
+          if (filters.type) {
+            query = query.eq('type', filters.type);
+          }
+
+          if (filters.customerName) {
+            query = query.ilike('customer_name', `%${filters.customerName}%`);
+          }
+
+          if (filters.startDate) {
+            query = query.gte('created_at', filters.startDate);
+          }
+
+          if (filters.endDate) {
+            query = query.lte('created_at', filters.endDate);
+          }
+
+          query = query.order('created_at', { ascending: false });
           query = query.limit(filters.limit);
-        }
 
-        const { data, error } = await query;
+          const { data, error } = await query;
+          if (!error && data) {
+            transactions = data;
+          }
+        } else {
+          // 如果没有指定 limit，使用分页获取所有数据
+          let allData = [];
+          let hasMore = true;
+          let pageSize = 1000;
+          let offset = 0;
 
-        if (!error && data) {
-          transactions = data;
+          while (hasMore) {
+            let query = supabase
+              .from('transactions')
+              .select('*');
+
+            // 应用筛选条件
+            if (filters.type) {
+              query = query.eq('type', filters.type);
+            }
+
+            if (filters.customerName) {
+              query = query.ilike('customer_name', `%${filters.customerName}%`);
+            }
+
+            if (filters.startDate) {
+              query = query.gte('created_at', filters.startDate);
+            }
+
+            if (filters.endDate) {
+              query = query.lte('created_at', filters.endDate);
+            }
+
+            query = query.order('created_at', { ascending: false });
+            query = query.range(offset, offset + pageSize - 1);
+
+            const { data, error } = await query;
+
+            if (error) {
+              console.error('分页查询错误:', error);
+              break;
+            }
+
+            if (data && data.length > 0) {
+              allData = allData.concat(data);
+              offset += pageSize;
+              hasMore = data.length === pageSize;
+            } else {
+              hasMore = false;
+            }
+          }
+
+          transactions = allData;
         }
       } catch (dbError) {
         console.warn('从数据库获取交易数据失败:', dbError);

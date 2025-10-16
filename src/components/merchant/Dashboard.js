@@ -20,10 +20,7 @@ const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [dateRange, setDateRange] = useState([
-    dayjs().subtract(30, 'day'),
-    dayjs()
-  ]);
+  const [dateRange, setDateRange] = useState(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -34,8 +31,8 @@ const Dashboard = () => {
     try {
       const [statsData, transactionsData, employeesData] = await Promise.all([
         transactionService.getTransactionStats({
-          startDate: dateRange[0]?.toISOString(),
-          endDate: dateRange[1]?.toISOString()
+          startDate: dateRange?.[0]?.toISOString(),
+          endDate: dateRange?.[1]?.toISOString()
         }),
         transactionService.getTransactions({ limit: 10 }),
         authService.getActiveEmployees()
@@ -131,7 +128,7 @@ const Dashboard = () => {
           value={dateRange}
           onChange={setDateRange}
           format="YYYY-MM-DD"
-          allowClear={false}
+          placeholder={['开始日期', '结束日期']}
         />
       </div>
 
