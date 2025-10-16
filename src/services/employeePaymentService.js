@@ -6,21 +6,34 @@ class EmployeePaymentService {
   // 获取员工收款统计
   async getEmployeePaymentStats(employeeName = null, filters = {}) {
     try {
-      // 获取所有交易记录
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select('*');
-
-      // 如果数据库查询失败，尝试从本地存储获取
+      // 获取所有交易记录（使用分页避免 1000 条限制）
       let allTransactions = [];
-      if (error || !transactions) {
-        console.warn('从数据库获取交易记录失败，使用本地存储:', error);
-        allTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
-      } else {
-        // 合并数据库和本地存储的数据
-        const localTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
-        allTransactions = [...transactions, ...localTransactions];
+      let hasMore = true;
+      let pageSize = 1000;
+      let offset = 0;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('*')
+          .range(offset, offset + pageSize - 1);
+
+        if (error) {
+          console.warn('从数据库获取交易记录失败，使用本地存储:', error);
+          allTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
+          hasMore = false;
+        } else if (data && data.length > 0) {
+          allTransactions = allTransactions.concat(data);
+          offset += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
       }
+
+      // 合并数据库和本地存储的数据
+      const localTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
+      allTransactions = [...allTransactions, ...localTransactions];
 
       // 应用日期筛选
       if (filters.startDate || filters.endDate) {
