@@ -2,10 +2,10 @@ import { supabase } from '../config/supabase';
 import { authService } from './authService';
 
 class WithdrawalService {
-  // 商人提现
+  // 商人/管理员提现
   async merchantWithdraw(withdrawalData) {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以提现');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以提现');
     }
 
     try {
@@ -80,15 +80,54 @@ class WithdrawalService {
   }
 
   // 计算商人总提现金额
-  async getTotalWithdrawals() {
+  async getTotalWithdrawals(merchantName = null) {
     try {
       const withdrawals = await this.getMerchantWithdrawals();
-      return withdrawals.reduce((total, withdrawal) => {
-        return total + (parseFloat(withdrawal.amount) || 0);
-      }, 0);
+
+      if (merchantName) {
+        // 计算特定商人的提现金额
+        return withdrawals
+          .filter(withdrawal => withdrawal.merchant_name === merchantName)
+          .reduce((total, withdrawal) => {
+            return total + (parseFloat(withdrawal.amount) || 0);
+          }, 0);
+      } else {
+        // 计算所有商人的提现金额
+        return withdrawals.reduce((total, withdrawal) => {
+          return total + (parseFloat(withdrawal.amount) || 0);
+        }, 0);
+      }
     } catch (error) {
       console.error('计算总提现金额失败:', error);
       return 0;
+    }
+  }
+
+  // 删除提现记录
+  async deleteWithdrawal(id) {
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以删除提现记录');
+    }
+
+    try {
+      // 尝试从数据库删除
+      const { error } = await supabase
+        .from('merchant_withdrawals')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.warn('数据库删除提现记录失败，尝试从本地存储删除:', error);
+        // 从本地存储删除
+        const localWithdrawals = JSON.parse(localStorage.getItem('localMerchantWithdrawals') || '[]');
+        const filteredWithdrawals = localWithdrawals.filter(w => w.id !== id);
+        localStorage.setItem('localMerchantWithdrawals', JSON.stringify(filteredWithdrawals));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('删除提现记录失败:', error);
+      throw error;
     }
   }
 }

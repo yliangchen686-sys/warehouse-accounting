@@ -15,7 +15,8 @@ import {
   Tag,
   Space,
   Tabs,
-  Alert
+  Alert,
+  Popconfirm
 } from 'antd';
 import {
   DollarOutlined,
@@ -23,7 +24,8 @@ import {
   HistoryOutlined,
   ReloadOutlined,
   PlusOutlined,
-  BankOutlined
+  BankOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import { employeePaymentService } from '../../services/employeePaymentService';
 import { withdrawalService } from '../../services/withdrawalService';
@@ -113,13 +115,35 @@ const EmployeePaymentManagement = () => {
         withdrawalDate: values.withdrawalDate.toISOString(),
         note: values.note
       });
-      
+
       message.success('提现记录已保存');
       setWithdrawalModalVisible(false);
       withdrawalForm.resetFields();
       loadData();
     } catch (error) {
       message.error('提现记录失败');
+      console.error(error);
+    }
+  };
+
+  const handleDeleteTransfer = async (id) => {
+    try {
+      await employeePaymentService.deleteTransfer(id);
+      message.success('删除转账记录成功');
+      loadData();
+    } catch (error) {
+      message.error('删除转账记录失败');
+      console.error(error);
+    }
+  };
+
+  const handleDeleteWithdrawal = async (id) => {
+    try {
+      await withdrawalService.deleteWithdrawal(id);
+      message.success('删除提现记录成功');
+      loadData();
+    } catch (error) {
+      message.error('删除提现记录失败');
       console.error(error);
     }
   };
@@ -342,6 +366,29 @@ const EmployeePaymentManagement = () => {
       key: 'created_at',
       render: (date) => dayjs(date).format('MM-DD HH:mm'),
       width: 120
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_, record) => (
+        <Popconfirm
+          title="确定要删除这条转账记录吗？"
+          onConfirm={() => handleDeleteTransfer(record.id)}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Button
+            type="link"
+            danger
+            icon={<DeleteOutlined />}
+            size="small"
+          >
+            删除
+          </Button>
+        </Popconfirm>
+      ),
+      width: 80,
+      fixed: 'right'
     }
   ];
 
@@ -383,6 +430,29 @@ const EmployeePaymentManagement = () => {
       key: 'created_at',
       render: (date) => dayjs(date).format('MM-DD HH:mm'),
       width: 120
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_, record) => (
+        <Popconfirm
+          title="确定要删除这条提现记录吗？"
+          onConfirm={() => handleDeleteWithdrawal(record.id)}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Button
+            type="link"
+            danger
+            icon={<DeleteOutlined />}
+            size="small"
+          >
+            删除
+          </Button>
+        </Popconfirm>
+      ),
+      width: 80,
+      fixed: 'right'
     }
   ];
 

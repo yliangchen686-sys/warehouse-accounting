@@ -231,19 +231,19 @@ class EmployeePaymentService {
   async getAllEmployeesSummary() {
     try {
       const stats = await this.getEmployeePaymentStats();
-      
+
       // 获取员工角色信息
       const { data: employees } = await supabase
         .from('employees')
         .select('name, role');
-      
+
       const employeeRoles = {};
       if (employees) {
         employees.forEach(emp => {
           employeeRoles[emp.name] = emp.role;
         });
       }
-      
+
       // 转换为数组格式，方便表格显示
       const summary = Object.values(stats).map(employee => ({
         employeeName: employee.employeeName,
@@ -261,6 +261,34 @@ class EmployeePaymentService {
       return summary;
     } catch (error) {
       console.error('获取员工收款汇总失败:', error);
+      throw error;
+    }
+  }
+
+  // 删除转账记录
+  async deleteTransfer(id) {
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以删除转账记录');
+    }
+
+    try {
+      // 尝试从数据库删除
+      const { error } = await supabase
+        .from('employee_transfers')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.warn('数据库删除转账记录失败，尝试从本地存储删除:', error);
+        // 从本地存储删除
+        const localTransfers = JSON.parse(localStorage.getItem('localEmployeeTransfers') || '[]');
+        const filteredTransfers = localTransfers.filter(t => t.id !== id);
+        localStorage.setItem('localEmployeeTransfers', JSON.stringify(filteredTransfers));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('删除转账记录失败:', error);
       throw error;
     }
   }
