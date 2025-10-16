@@ -139,11 +139,19 @@ const EmployeePaymentManagement = () => {
 
   // 计算总统计
   const totalStats = employeesSummary.reduce((acc, emp) => {
-    // 对于商人，使用提现金额而不是转账金额
-    const transferredAmount = (emp.employeeName === '商人' || emp.employeeName === '系统管理员') 
-      ? (emp.totalWithdrawn || 0) 
-      : emp.totalTransferred;
-    
+    // 计算"已转账/提现"金额
+    let transferredAmount;
+    if (emp.employeeName === '管理员' || emp.employeeName === '系统管理员') {
+      // 管理员：只计算提现金额
+      transferredAmount = emp.totalWithdrawn || 0;
+    } else if (emp.employeeName === '商人' || emp.role === 'merchant') {
+      // 商人：转账给员工 + 自己提现
+      transferredAmount = (emp.totalTransferred || 0) + (emp.totalWithdrawn || 0);
+    } else {
+      // 普通员工：只计算转账金额
+      transferredAmount = emp.totalTransferred || 0;
+    }
+
     return {
       totalCollected: acc.totalCollected + emp.totalAmount,
       totalTransferred: acc.totalTransferred + transferredAmount,
@@ -178,20 +186,30 @@ const EmployeePaymentManagement = () => {
       dataIndex: 'totalTransferred',
       key: 'totalTransferred',
       render: (amount, record) => {
-        // 商人显示提现金额
-        if (record.employeeName === '商人' || record.employeeName === '系统管理员') {
+        // 根据角色显示不同内容
+        if (record.role === 'manager' || record.role === 'admin' || record.employeeName === '管理员' || record.employeeName === '系统管理员') {
+          // 管理员显示提现金额
           return (
             <span style={{ color: '#722ed1' }}>
               {formatCurrency(record.totalWithdrawn || 0)}
             </span>
           );
+        } else if (record.role === 'merchant' || record.employeeName === '商人') {
+          // 商人显示转账金额+提现金额的总和
+          const totalAmount = (record.totalTransferred || 0) + (record.totalWithdrawn || 0);
+          return (
+            <span style={{ color: '#722ed1' }}>
+              {formatCurrency(totalAmount)}
+            </span>
+          );
+        } else {
+          // 员工显示转账金额
+          return (
+            <span style={{ color: '#1890ff' }}>
+              {formatCurrency(amount)}
+            </span>
+          );
         }
-        // 员工显示转账金额
-        return (
-          <span style={{ color: '#1890ff' }}>
-            {formatCurrency(amount)}
-          </span>
-        );
       },
       width: 120,
       sorter: (a, b) => a.totalTransferred - b.totalTransferred
@@ -201,8 +219,8 @@ const EmployeePaymentManagement = () => {
       dataIndex: 'currentBalance',
       key: 'currentBalance',
       render: (balance, record) => {
-        // 商人显示总收入，员工显示待转账余额
-        const title = record.employeeName === '商人' || record.employeeName === '系统管理员' ? '总收入' : '待转账';
+        // 管理员/商人显示总收入，员工显示待转账余额
+        const title = record.employeeName === '管理员' || record.employeeName === '商人' || record.employeeName === '系统管理员' ? '总收入' : '待转账';
         const status = getBalanceStatus(balance);
         return (
           <div>
@@ -238,8 +256,9 @@ const EmployeePaymentManagement = () => {
       title: '操作',
       key: 'actions',
       render: (_, record) => {
-        // 商人显示提现按钮
-        if (record.employeeName === '商人' || record.employeeName === '系统管理员') {
+        // 根据角色显示不同按钮
+        if (record.role === 'manager' || record.role === 'admin' || record.employeeName === '管理员' || record.employeeName === '系统管理员') {
+          // 管理员显示提现按钮
           return (
             <Button
               type="primary"
@@ -252,20 +271,34 @@ const EmployeePaymentManagement = () => {
               提现
             </Button>
           );
+        } else if (record.role === 'merchant' || record.employeeName === '商人') {
+          // 商人显示提现按钮
+          return (
+            <Button
+              type="primary"
+              size="small"
+              icon={<BankOutlined />}
+              onClick={() => handleWithdraw(record)}
+              disabled={record.currentBalance <= 0}
+              style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
+            >
+              提现
+            </Button>
+          );
+        } else {
+          // 员工显示转账按钮
+          return (
+            <Button
+              type="primary"
+              size="small"
+              icon={<SwapOutlined />}
+              onClick={() => handleTransfer(record)}
+              disabled={record.currentBalance <= 0}
+            >
+              转账
+            </Button>
+          );
         }
-        
-        // 员工显示转账按钮
-        return (
-          <Button
-            type="primary"
-            size="small"
-            icon={<SwapOutlined />}
-            onClick={() => handleTransfer(record)}
-            disabled={record.currentBalance <= 0}
-          >
-            转账
-          </Button>
-        );
       },
       width: 80
     }
@@ -321,7 +354,7 @@ const EmployeePaymentManagement = () => {
       width: 150
     },
     {
-      title: '商人姓名',
+      title: '管理员/商人姓名',
       dataIndex: 'merchant_name',
       key: 'merchant_name',
       width: 120
@@ -360,7 +393,7 @@ const EmployeePaymentManagement = () => {
         
         <Alert
           message="收款计算说明"
-          description="员工：净收款 = 销售收款 - 回收金额，待转账 = 净收款 - 已转账金额。商人：总收入 = 销售收款 + 员工转账收款 - 回收金额。进货和赠送不计入收款统计。"
+          description="员工：净收款 = 销售收款 - 回收金额，待转账 = 净收款 - 已转账金额。商人：当前余额 = 销售收款 - 回收金额 - 转账金额 - 提现金额。管理员：当前余额 = 销售收款 + 员工转账收款 + 商人转账收款 - 回收金额 - 提现金额。进货和赠送不计入收款统计。"
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -475,7 +508,7 @@ const EmployeePaymentManagement = () => {
         <TabPane tab="提现记录" key="withdrawals">
           <Card>
             <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0 }}>商人提现记录</h3>
+              <h3 style={{ margin: 0 }}>管理员/商人提现记录</h3>
               <Button
                 icon={<ReloadOutlined />}
                 onClick={loadData}
@@ -527,7 +560,7 @@ const EmployeePaymentManagement = () => {
 
       {/* 转账模态框 */}
       <Modal
-        title="员工转账给商人"
+        title="员工转账给管理员"
         open={transferModalVisible}
         onCancel={() => {
           setTransferModalVisible(false);
@@ -603,9 +636,9 @@ const EmployeePaymentManagement = () => {
         </Form>
       </Modal>
 
-      {/* 商人提现模态框 */}
+      {/* 管理员/商人提现模态框 */}
       <Modal
-        title="商人提现"
+        title="管理员/商人提现"
         open={withdrawalModalVisible}
         onCancel={() => {
           setWithdrawalModalVisible(false);
@@ -621,7 +654,7 @@ const EmployeePaymentManagement = () => {
         >
           <Form.Item
             name="merchantName"
-            label="商人姓名"
+            label="管理员/商人姓名"
           >
             <Input disabled />
           </Form.Item>
