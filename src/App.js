@@ -26,6 +26,17 @@ function App() {
       setUserRole(roleParam);
     }
 
+    // 一次性清除旧的 localStorage 数据（临时代码）
+    const hasCleared = localStorage.getItem('_data_cleared_v1');
+    if (!hasCleared) {
+      console.log('检测到首次运行 v1.0.2，清除旧的 localStorage 数据...');
+      localStorage.removeItem('localTransactions');
+      localStorage.removeItem('localEmployeeTransfers');
+      localStorage.removeItem('localMerchantWithdrawals');
+      localStorage.setItem('_data_cleared_v1', 'true');
+      console.log('旧数据已清除');
+    }
+
     // 检查是否已登录
     const currentUser = authService.getCurrentUser();
     if (currentUser) {
@@ -65,7 +76,7 @@ function App() {
           <Login onLogin={handleLogin} userRole={userRole} />
         ) : (
           <>
-            {user.role === 'merchant' ? (
+            {user.role === 'merchant' || user.role === 'admin' || user.role === 'manager' ? (
               <MerchantApp user={user} onLogout={handleLogout} />
             ) : (
               <EmployeeApp user={user} onLogout={handleLogout} />
