@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\n修改提成计算逻辑：从按收款人改为按客户绑定人计算\n\n- 更新 salaryService.js：按客户绑定关系统计销售数量\n- 更新 employeePaymentService.js：按客户绑定关系统计收款金额\n- 添加数据库更新脚本：update-salary-calculation-function.sql\n- 添加测试验证脚本：test-salary-function.sql\n- 添加详细文档：SUPABASE_UPDATE_GUIDE.md 和 UPDATE_COMPLETE_CHECKLIST.md\n\n提成计算规则变更：\n- 旧规则：提成归属于实际收款人（collector）\n- 新规则：提成归属于客户绑定的员工（customer_bindings.employee_name）\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\n添加 Vercel 部署配置\n\n- 创建 vercel.json 配置文件\n- 更新 .gitignore 忽略 .vercel 目录\n- 添加详细的部署指南 VERCEL_DEPLOYMENT_GUIDE.md\n\n配置说明：\n- 使用 Create React App 构建\n- 输出目录：build\n- 配置了 SPA 路由重定向规则\n- 包含完整的部署步骤和常见问题解决方案\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(if exist build rmdir /s /q build)",
+      "Bash(if exist release rmdir /s /q release)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm run:*)",
+      "Bash(tree:*)",
+      "Bash(npm start)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd /c taskkill:*)",
+      "Bash(npm install:*)",
+      "Bash(dir:*)",
+      "Bash(cmd /c:*)",
+      "Bash(where gh)",
+      "Bash(winget install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

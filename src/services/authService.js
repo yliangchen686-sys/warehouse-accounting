@@ -22,10 +22,10 @@ class AuthService {
         const defaultAccounts = {
           'admin': { 
             id: 1, 
-            name: '商人', 
+            name: '管理员', 
             username: 'admin', 
             password: 'admin123', 
-            role: 'merchant' 
+            role: 'manager' 
           },
           'employee1': { 
             id: 2, 
@@ -129,10 +129,22 @@ class AuthService {
     return user && user.role === 'employee';
   }
 
-  // 创建员工账户（仅商人可用）
+  // 检查是否是管理员
+  isAdmin() {
+    const user = this.getCurrentUser();
+    return user && (user.role === 'admin' || user.role === 'manager');
+  }
+
+  // 检查是否是经理
+  isManager() {
+    const user = this.getCurrentUser();
+    return user && user.role === 'manager';
+  }
+
+  // 创建员工账户（仅商人或管理员可用）
   async createEmployee(employeeData) {
-    if (!this.isMerchant()) {
-      throw new Error('只有商人可以创建员工账户');
+    if (!this.isMerchant() && !this.isAdmin()) {
+      throw new Error('只有商人或管理员可以创建员工账户');
     }
 
     try {
@@ -178,10 +190,10 @@ class AuthService {
     }
   }
 
-  // 更新员工信息（仅商人可用）
+  // 更新员工信息（仅商人或管理员可用）
   async updateEmployee(employeeId, updateData) {
-    if (!this.isMerchant()) {
-      throw new Error('只有商人可以更新员工信息');
+    if (!this.isMerchant() && !this.isAdmin()) {
+      throw new Error('只有商人或管理员可以更新员工信息');
     }
 
     try {
@@ -242,10 +254,10 @@ class AuthService {
     }
   }
 
-  // 获取所有员工（仅商人可用）
+  // 获取所有员工（仅商人或管理员可用）
   async getAllEmployees() {
-    if (!this.isMerchant()) {
-      throw new Error('只有商人可以查看所有员工');
+    if (!this.isMerchant() && !this.isAdmin()) {
+      throw new Error('只有商人或管理员可以查看所有员工');
     }
 
     try {
