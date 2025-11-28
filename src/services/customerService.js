@@ -42,8 +42,8 @@ class CustomerService {
 
   // 绑定客户到员工
   async bindCustomerToEmployee(customerName, employeeName) {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以绑定客户');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以绑定客户');
     }
 
     try {
@@ -113,8 +113,8 @@ class CustomerService {
 
   // 解除客户绑定
   async unbindCustomer(customerName) {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以解除客户绑定');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以解除客户绑定');
     }
 
     try {

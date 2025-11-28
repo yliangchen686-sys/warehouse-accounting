@@ -4,8 +4,8 @@ import { authService } from './authService';
 class SyncService {
   // 同步本地员工数据到数据库
   async syncLocalEmployeesToDatabase() {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以同步数据');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以同步数据');
     }
 
     try {
@@ -78,8 +78,8 @@ class SyncService {
 
   // 同步本地交易数据到数据库
   async syncLocalTransactionsToDatabase() {
-    if (!authService.isMerchant()) {
-      throw new Error('只有商人可以同步数据');
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以同步数据');
     }
 
     try {

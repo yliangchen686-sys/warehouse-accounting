@@ -11,6 +11,69 @@ autoUpdater.autoInstallOnAppQuit = true; // 退出时自动安装
 
 let merchantWindow = null;
 let employeeWindow = null;
+let downloadProgressWindow = null;
+
+const downloadProgressHtmlPath = path.join(__dirname, 'download-progress.html');
+
+function createDownloadProgressWindow() {
+  if (downloadProgressWindow) {
+    downloadProgressWindow.focus();
+    return downloadProgressWindow;
+  }
+
+  downloadProgressWindow = new BrowserWindow({
+    width: 360,
+    height: 200,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    title: '更新下载中',
+    parent: merchantWindow || employeeWindow || null,
+    modal: false,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  downloadProgressWindow.loadFile(downloadProgressHtmlPath);
+
+  downloadProgressWindow.once('ready-to-show', () => {
+    downloadProgressWindow.show();
+  });
+
+  downloadProgressWindow.webContents.once('did-finish-load', () => {
+    sendProgressToWindow('download-progress-status', '准备开始下载...');
+  });
+
+  downloadProgressWindow.on('closed', () => {
+    downloadProgressWindow = null;
+  });
+
+  return downloadProgressWindow;
+}
+
+function sendProgressToWindow(channel, payload) {
+  if (
+    !downloadProgressWindow ||
+    !downloadProgressWindow.webContents ||
+    downloadProgressWindow.webContents.isDestroyed()
+  ) {
+    return;
+  }
+
+  const webContents = downloadProgressWindow.webContents;
+  if (typeof webContents.isLoading === 'function' && webContents.isLoading()) {
+    webContents.once('did-finish-load', () => {
+      if (!webContents.isDestroyed()) {
+        webContents.send(channel, payload);
+      }
+    });
+  } else {
+    webContents.send(channel, payload);
+  }
+}
 
 function createMerchantWindow() {
   merchantWindow = new BrowserWindow({
@@ -89,6 +152,11 @@ autoUpdater.on('update-available', (info) => {
     cancelId: 1
   }).then((result) => {
     if (result.response === 0) {
+      const progressWindow = createDownloadProgressWindow();
+      progressWindow.once('ready-to-show', () => {
+        sendProgressToWindow('download-progress-status', '正在准备下载更新...');
+      });
+      sendProgressToWindow('download-progress-status', '正在准备下载更新...');
       autoUpdater.downloadUpdate();
     }
   });
@@ -101,10 +169,32 @@ autoUpdater.on('update-not-available', () => {
 autoUpdater.on('download-progress', (progressObj) => {
   const message = `下载速度: ${progressObj.bytesPerSecond} - 已下载 ${progressObj.percent}%`;
   console.log(message);
+  sendProgressToWindow('download-progress-data', {
+    percent: progressObj.percent || 0,
+    bytesPerSecond: progressObj.bytesPerSecond || 0,
+    transferred: progressObj.transferred || 0,
+    total: progressObj.total || 0
+  });
+  if (merchantWindow) {
+    merchantWindow.setProgressBar((progressObj.percent || 0) / 100);
+  }
+  if (employeeWindow) {
+    employeeWindow.setProgressBar((progressObj.percent || 0) / 100);
+  }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
   console.log('更新下载完成');
+  sendProgressToWindow('download-progress-status', '下载完成，等待确认安装...');
+  if (downloadProgressWindow) {
+    downloadProgressWindow.close();
+  }
+  if (merchantWindow) {
+    merchantWindow.setProgressBar(-1);
+  }
+  if (employeeWindow) {
+    employeeWindow.setProgressBar(-1);
+  }
   dialog.showMessageBox({
     type: 'info',
     title: '更新已下载',
@@ -121,6 +211,20 @@ autoUpdater.on('update-downloaded', (info) => {
 
 autoUpdater.on('error', (err) => {
   console.error('自动更新出错:', err);
+  sendProgressToWindow('download-progress-status', `下载出错：${err.message || err}`);
+  if (downloadProgressWindow) {
+    setTimeout(() => {
+      if (downloadProgressWindow) {
+        downloadProgressWindow.close();
+      }
+    }, 2000);
+  }
+  if (merchantWindow) {
+    merchantWindow.setProgressBar(-1);
+  }
+  if (employeeWindow) {
+    employeeWindow.setProgressBar(-1);
+  }
 });
 
 app.whenReady().then(() => {

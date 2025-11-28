@@ -9,13 +9,15 @@ import {
   EyeOutlined,
   BellOutlined,
   DollarOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 import { authService } from '../../services/authService';
 import { transactionService } from '../../services/transactionService';
 import EmployeeTransactionList from './EmployeeTransactionList';
 import EmployeeSalary from './EmployeeSalary';
 import EmployeeTasks from './EmployeeTasks';
+import BonusPool from '../merchant/BonusPool';
 
 const { Header, Sider, Content } = Layout;
 
@@ -102,6 +104,8 @@ const EmployeeApp = ({ user, onLogout }) => {
         return <EmployeeSalary user={user} />;
       case 'tasks':
         return <EmployeeTasks user={user} />;
+      case 'bonusPool':
+        return <BonusPool user={user} />;
       default:
         return <EmployeeTransactionList user={user} />;
     }
@@ -144,6 +148,9 @@ const EmployeeApp = ({ user, onLogout }) => {
           </Menu.Item>
           <Menu.Item key="tasks" icon={<CalendarOutlined />}>
             本月任务
+          </Menu.Item>
+          <Menu.Item key="bonusPool" icon={<TrophyOutlined />}>
+            奖金池
           </Menu.Item>
         </Menu>
       </Sider>

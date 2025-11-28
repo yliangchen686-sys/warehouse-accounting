@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS employees (
     name VARCHAR(100) NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('merchant', 'employee')),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('merchant', 'employee', 'admin', 'manager')),
     status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     left_at TIMESTAMP WITH TIME ZONE
@@ -82,9 +82,9 @@ CREATE POLICY "Employees can view transactions" ON transactions
         )
     );
 
--- 创建默认商人账户（密码：admin123）
+-- 创建默认管理员账户（密码：admin123）
 INSERT INTO employees (name, username, password, role, status) 
-VALUES ('商人', 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMye.5xCGwJzCG3.8l7iJzG5P3g8OYzJq1u', 'merchant', 'active')
+VALUES ('管理员', 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMye.5xCGwJzCG3.8l7iJzG5P3g8OYzJq1u', 'manager', 'active')
 ON CONFLICT (username) DO NOTHING;
 `;
 
@@ -105,5 +105,7 @@ export const employeeStatus = {
 // 角色映射
 export const roles = {
   merchant: '商人',
-  employee: '员工'
+  employee: '员工',
+  admin: '管理员',
+  manager: '管理员'
 };

@@ -11,7 +11,8 @@ import {
   WalletOutlined,
   LinkOutlined,
   DollarOutlined,
-  GiftOutlined
+  GiftOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 import { authService } from '../../services/authService';
 import { transactionService } from '../../services/transactionService';
@@ -22,6 +23,7 @@ import EmployeePaymentManagement from './EmployeePaymentManagement';
 import CustomerBindingManagement from './CustomerBindingManagement';
 import CustomerGiftManagement from './CustomerGiftManagement';
 import SalaryManagement from './SalaryManagement';
+import BonusPool from './BonusPool';
 import Dashboard from './Dashboard';
 
 const { Header, Sider, Content } = Layout;
@@ -109,6 +111,8 @@ const MerchantApp = ({ user, onLogout }) => {
         return <CustomerGiftManagement />;
       case 'salary':
         return <SalaryManagement />;
+      case 'bonusPool':
+        return <BonusPool user={user} />;
       case 'employees':
         return <EmployeeManagement />;
       default:
@@ -163,6 +167,9 @@ const MerchantApp = ({ user, onLogout }) => {
           <Menu.Item key="salary" icon={<DollarOutlined />}>
             员工工资
           </Menu.Item>
+          <Menu.Item key="bonusPool" icon={<TrophyOutlined />}>
+            奖金池
+          </Menu.Item>
           <Menu.Item key="employees" icon={<TeamOutlined />}>
             员工管理
           </Menu.Item>
@@ -180,7 +187,7 @@ const MerchantApp = ({ user, onLogout }) => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <h2 style={{ margin: 0, color: '#1f1f1f' }}>
-              商人端 - 管理中心
+              {user.role === 'admin' || user.role === 'manager' ? '管理员端' : '商人端'} - 管理中心
             </h2>
           </div>
 
