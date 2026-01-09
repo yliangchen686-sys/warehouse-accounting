@@ -36,9 +36,11 @@
 
 在 `release` 目录中，上传以下文件：
 
-1. `仓储记账系统 Setup 1.0.6.exe` - 安装程序
+1. `warehouse-accounting-setup-1.0.6.exe` 或 `仓储记账系统 Setup 1.0.6.exe` - 安装程序
 2. `仓储记账系统 Setup 1.0.6.exe.blockmap` - 增量更新文件
 3. `latest.yml` - 更新配置文件
+
+**注意**：根据 `latest.yml` 文件，安装程序文件名可能是 `warehouse-accounting-setup-1.0.6.exe`，请根据实际文件名上传。
 
 ## 发布步骤
 
@@ -87,7 +89,7 @@
 
 ## 安装说明
 
-1. 下载 `仓储记账系统 Setup 1.0.6.exe`
+1. 下载安装程序（`warehouse-accounting-setup-1.0.6.exe` 或 `仓储记账系统 Setup 1.0.6.exe`）
 2. 运行安装程序
 3. 按照提示完成安装
 4. 旧版本用户可以通过"检查更新"功能自动更新
@@ -96,7 +98,7 @@
 ### 3. 上传文件
 
 将 `release` 目录中的以下文件拖到上传区：
-- `仓储记账系统 Setup 1.0.6.exe`
+- `warehouse-accounting-setup-1.0.6.exe` 或 `仓储记账系统 Setup 1.0.6.exe`（根据实际文件名）
 - `仓储记账系统 Setup 1.0.6.exe.blockmap`
 - `latest.yml`
 
