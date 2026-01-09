@@ -93,24 +93,48 @@ class SalaryService {
   }
 
   // 获取所有员工的月工资
-  async getAllEmployeesMonthlySalary(year, month) {
+  // beforeDate: 只计算在此日期之前（包括该日期）创建的员工工资
+  async getAllEmployeesMonthlySalary(year, month, beforeDate = null) {
     try {
-      // 获取所有在职员工
+      // 计算该月的结束时间（用于过滤新增员工）
+      const monthEndDate = beforeDate || dayjs(`${year}-${month}-01`).endOf('month').toISOString();
+
+      // 获取所有在职员工，且创建时间在该月结束之前
       const { data: employees } = await supabase
         .from('employees')
-        .select('name')
+        .select('name, created_at')
         .eq('status', 'active')
-        .eq('role', 'employee'); // 只计算员工工资，不包括商人
+        .eq('role', 'employee') // 只计算员工工资，不包括商人
+        .lte('created_at', monthEndDate); // 只获取在该月结束之前创建的员工
 
       const localEmployees = JSON.parse(localStorage.getItem('localEmployees') || '[]')
-        .filter(emp => emp.status === 'active' && emp.role === 'employee');
+        .filter(emp => {
+          if (emp.status !== 'active' || emp.role !== 'employee') {
+            return false;
+          }
+          // 检查本地员工的创建时间
+          if (emp.created_at) {
+            const empCreatedAt = dayjs(emp.created_at);
+            const monthEnd = dayjs(monthEndDate);
+            return empCreatedAt.isBefore(monthEnd) || empCreatedAt.isSame(monthEnd, 'day');
+          }
+          // 如果没有创建时间，默认认为是在该月之前创建的（兼容旧数据）
+          return true;
+        });
 
+      // 合并数据库和本地员工，去重
       const allEmployees = [...(employees || []), ...localEmployees];
-      const uniqueEmployees = [...new Set(allEmployees.map(emp => emp.name))];
+      const employeeMap = new Map();
+      allEmployees.forEach(emp => {
+        if (!employeeMap.has(emp.name)) {
+          employeeMap.set(emp.name, emp);
+        }
+      });
+      const uniqueEmployees = Array.from(employeeMap.values());
 
       // 计算每个员工的工资
-      const salaryPromises = uniqueEmployees.map(employeeName => 
-        this.calculateMonthlySalary(employeeName, year, month)
+      const salaryPromises = uniqueEmployees.map(employee => 
+        this.calculateMonthlySalary(employee.name, year, month)
       );
 
       const salaries = await Promise.all(salaryPromises);

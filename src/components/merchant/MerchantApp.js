@@ -12,7 +12,8 @@ import {
   LinkOutlined,
   DollarOutlined,
   GiftOutlined,
-  TrophyOutlined
+  TrophyOutlined,
+  PhoneOutlined
 } from '@ant-design/icons';
 import { authService } from '../../services/authService';
 import { transactionService } from '../../services/transactionService';
@@ -25,6 +26,7 @@ import CustomerGiftManagement from './CustomerGiftManagement';
 import SalaryManagement from './SalaryManagement';
 import BonusPool from './BonusPool';
 import Dashboard from './Dashboard';
+import CustomerDataManagement from './CustomerDataManagement';
 
 const { Header, Sider, Content } = Layout;
 
@@ -107,6 +109,8 @@ const MerchantApp = ({ user, onLogout }) => {
         return <EmployeePaymentManagement />;
       case 'customers':
         return <CustomerBindingManagement />;
+      case 'customerData':
+        return <CustomerDataManagement user={user} />;
       case 'gifts':
         return <CustomerGiftManagement />;
       case 'salary':
@@ -160,6 +164,9 @@ const MerchantApp = ({ user, onLogout }) => {
           </Menu.Item>
           <Menu.Item key="customers" icon={<LinkOutlined />}>
             客户绑定
+          </Menu.Item>
+          <Menu.Item key="customerData" icon={<PhoneOutlined />}>
+            客户数据
           </Menu.Item>
           <Menu.Item key="gifts" icon={<GiftOutlined />}>
             客户赠送

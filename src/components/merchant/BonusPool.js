@@ -21,7 +21,8 @@ import {
   ShoppingCartOutlined,
   ReloadOutlined,
   ArrowUpOutlined,
-  ArrowDownOutlined
+  ArrowDownOutlined,
+  DatabaseOutlined
 } from '@ant-design/icons';
 import { bonusPoolService } from '../../services/bonusPoolService';
 import { authService } from '../../services/authService';
@@ -34,6 +35,7 @@ const BonusPool = ({ user }) => {
   const [deductModalVisible, setDeductModalVisible] = useState(false);
   const [deductAmount, setDeductAmount] = useState(null);
   const [deducting, setDeducting] = useState(false);
+  const [initializing, setInitializing] = useState(false);
   const isMerchant = authService.isMerchant() || authService.isAdmin();
   const isEmployee = authService.isEmployee();
 
@@ -88,6 +90,38 @@ const BonusPool = ({ user }) => {
     } finally {
       setDeducting(false);
     }
+  };
+
+  const handleInitializeData = async () => {
+    Modal.confirm({
+      title: '初始化历史数据',
+      content: '此操作将重新计算所有历史月份的奖金池数据并保存到缓存表。这可能需要一些时间，是否继续？',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: async () => {
+        setInitializing(true);
+        try {
+          message.loading({ content: '正在初始化数据，请稍候...', key: 'init', duration: 0 });
+          const result = await bonusPoolService.recalculateAllMonthlyBonusPools();
+          message.success({ 
+            content: `初始化完成！累计奖金池总额: ${result.toFixed(2)}元`, 
+            key: 'init',
+            duration: 5
+          });
+          // 重新加载数据
+          await loadData();
+        } catch (error) {
+          console.error('初始化失败:', error);
+          message.error({ 
+            content: `初始化失败: ${error.message}`, 
+            key: 'init',
+            duration: 5
+          });
+        } finally {
+          setInitializing(false);
+        }
+      }
+    });
   };
 
   const formatCurrency = (amount) => {
@@ -156,14 +190,25 @@ const BonusPool = ({ user }) => {
             刷新
           </Button>
           {isMerchant && (
-            <Button
-              type="primary"
-              icon={<MinusCircleOutlined />}
-              onClick={handleDeduct}
-              disabled={!bonusPoolData || bonusPoolData.currentBalance <= 0}
-            >
-              扣款
-            </Button>
+            <>
+              <Button
+                icon={<DatabaseOutlined />}
+                onClick={handleInitializeData}
+                loading={initializing}
+                style={{ marginRight: 8 }}
+                type="default"
+              >
+                初始化数据
+              </Button>
+              <Button
+                type="primary"
+                icon={<MinusCircleOutlined />}
+                onClick={handleDeduct}
+                disabled={!bonusPoolData || bonusPoolData.currentBalance <= 0}
+              >
+                扣款
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -343,6 +388,11 @@ const BonusPool = ({ user }) => {
                   <Descriptions.Item label="本月奖金池（净利润 × 1%）">
                     <Tag color="gold" style={{ fontSize: 16 }}>
                       {formatCurrency(bonusPoolData.bonusPool)}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="本月之前累计奖金池余额">
+                    <Tag color="blue" style={{ fontSize: 16 }}>
+                      {formatCurrency(bonusPoolData.previousCumulativeBonusPool || 0)}
                     </Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="累计已扣款">
