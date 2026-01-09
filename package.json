@@ -68,7 +68,8 @@
       "perMachine": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "仓储记账系统"
+      "shortcutName": "仓储记账系统",
+      "artifactName": "warehouse-accounting-setup-${version}.${ext}"
     },
     "publish": [
       {
