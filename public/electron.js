@@ -139,6 +139,13 @@ function createEmployeeWindow() {
 // 自动更新事件处理
 autoUpdater.on('checking-for-update', () => {
   console.log('正在检查更新...');
+  // 可选：显示检查中的提示
+  // dialog.showMessageBox({
+  //   type: 'info',
+  //   title: '检查更新',
+  //   message: '正在检查更新...',
+  //   buttons: ['确定']
+  // });
 });
 
 autoUpdater.on('update-available', (info) => {
@@ -164,6 +171,12 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('update-not-available', () => {
   console.log('当前已是最新版本');
+  dialog.showMessageBox({
+    type: 'info',
+    title: '检查更新',
+    message: '当前已是最新版本，无需更新。',
+    buttons: ['确定']
+  });
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
@@ -225,6 +238,13 @@ autoUpdater.on('error', (err) => {
   if (employeeWindow) {
     employeeWindow.setProgressBar(-1);
   }
+  // 显示错误提示给用户
+  dialog.showMessageBox({
+    type: 'error',
+    title: '检查更新失败',
+    message: `检查更新时出错：${err.message || err}\n\n请检查网络连接或稍后重试。`,
+    buttons: ['确定']
+  });
 });
 
 app.whenReady().then(() => {
@@ -258,6 +278,7 @@ app.whenReady().then(() => {
           label: '检查更新',
           click: () => {
             if (!isDev) {
+              console.log('手动检查更新...');
               autoUpdater.checkForUpdates();
             } else {
               dialog.showMessageBox({
