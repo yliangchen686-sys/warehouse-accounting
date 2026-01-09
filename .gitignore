@@ -49,3 +49,6 @@ ehthumbs.db
 
 # Vercel
 .vercel
+
+# Electron cache
+%USERPROFILE%/
