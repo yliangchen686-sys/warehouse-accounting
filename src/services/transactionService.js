@@ -94,6 +94,80 @@ class TransactionService {
     }
   }
 
+  // 从申请创建交易记录（审核通过后调用）
+  async createTransactionFromRequest(request) {
+    try {
+      const transactionData = {
+        type: request.type,
+        customerName: request.customer_name,
+        productName: null, // 申请中没有产品名称，设为 null
+        collector: request.collector,
+        quantity: request.quantity,
+        giftQuantity: request.gift_quantity,
+        unitPrice: request.unit_price,
+        totalAmount: request.total_amount
+      };
+
+      // 调用现有的创建交易方法
+      // 注意：这里需要临时绕过权限检查，因为这是从审核流程调用的
+      const transactionRecord = {
+        type: transactionData.type,
+        customer_name: transactionData.customerName,
+        product_name: transactionData.productName,
+        collector: transactionData.collector,
+        quantity: parseFloat(transactionData.quantity) || 0,
+        gift_quantity: parseFloat(transactionData.giftQuantity) || 0,
+        unit_price: parseFloat(transactionData.unitPrice) || 0,
+        total_amount: parseFloat(transactionData.totalAmount) || 0
+      };
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([transactionRecord])
+        .select();
+
+      if (error) {
+        console.warn('从申请创建交易记录失败，使用本地存储:', error);
+        
+        const existingTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
+        const nextId = -(existingTransactions.length + 1);
+
+        const localTransaction = {
+          ...transactionRecord,
+          id: nextId,
+          created_at: new Date().toISOString()
+        };
+
+        existingTransactions.push(localTransaction);
+        localStorage.setItem('localTransactions', JSON.stringify(existingTransactions));
+
+        return localTransaction;
+      }
+
+      // 自动更新库存
+      if (data && data[0]) {
+        try {
+          await inventoryService.handleTransactionStock(
+            {
+              type: transactionData.type,
+              productName: transactionData.productName,
+              quantity: transactionData.quantity,
+              giftQuantity: transactionData.giftQuantity
+            },
+            data[0].id
+          );
+        } catch (inventoryError) {
+          console.error('库存更新失败:', inventoryError);
+        }
+      }
+
+      return data[0];
+    } catch (error) {
+      console.error('从申请创建交易记录失败:', error);
+      throw error;
+    }
+  }
+
   // 更新交易记录（仅商人或管理员可用）
   async updateTransaction(transactionId, updateData) {
     if (!authService.isMerchant() && !authService.isAdmin()) {

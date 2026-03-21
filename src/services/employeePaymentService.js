@@ -2,6 +2,28 @@ import { supabase } from '../config/supabase';
 import { authService } from './authService';
 import { withdrawalService } from './withdrawalService';
 
+/**
+ * 规范化员工名：去除首尾空格、全角转半角，用于转账/提现记录匹配
+ * 解决 "小梦" 与 "小梦 " 或全角空格等导致匹配不到的问题
+ */
+function normalizeEmployeeName(name) {
+  if (name == null || typeof name !== 'string') return '';
+  return name
+    .trim()
+    .replace(/\s+/g, ' ')           // 连续空格压成单个
+    .replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); // 全角转半角
+}
+
+/**
+ * 从转账/提现记录中取员工名字段（兼容 snake_case 与 camelCase）
+ */
+function getTransferEmployeeName(record) {
+  return record.employee_name ?? record.employeeName ?? '';
+}
+function getWithdrawalMerchantName(record) {
+  return record.merchant_name ?? record.merchantName ?? '';
+}
+
 class EmployeePaymentService {
   // 获取员工收款统计
   async getEmployeePaymentStats(employeeName = null, filters = {}) {
@@ -45,22 +67,25 @@ class EmployeePaymentService {
         });
       }
 
-      // 如果指定了员工名称，只统计该员工的收款
+      // 如果指定了员工名称，只统计该员工的收款（按规范化名字匹配）
       if (employeeName) {
-        allTransactions = allTransactions.filter(t => t.collector === employeeName);
+        const norm = normalizeEmployeeName(employeeName);
+        allTransactions = allTransactions.filter(t => normalizeEmployeeName(t.collector) === norm);
       }
 
       // 按员工分组统计收款（按收款人统计）
+      // 使用规范化名字作为 key，避免 "小梦"/"小梦 " 等拆成两个人导致转账匹配不到
       const employeeStats = {};
 
       allTransactions.forEach(transaction => {
         const collector = transaction.collector;
+        const key = normalizeEmployeeName(collector) || collector;
         const amount = parseFloat(transaction.total_amount) || 0;
         const type = transaction.type;
 
-        if (!employeeStats[collector]) {
-          employeeStats[collector] = {
-            employeeName: collector,
+        if (!employeeStats[key]) {
+          employeeStats[key] = {
+            employeeName: key,
             totalAmount: 0,
             transactionCount: 0,
             transactions: []
@@ -69,16 +94,13 @@ class EmployeePaymentService {
 
         // 修改收款计算逻辑：销售收款 - 回收金额
         if (type === 'sale') {
-          // 销售：增加收款金额
-          employeeStats[collector].totalAmount += amount;
+          employeeStats[key].totalAmount += amount;
         } else if (type === 'return') {
-          // 回收：减少收款金额
-          employeeStats[collector].totalAmount -= amount;
+          employeeStats[key].totalAmount -= amount;
         }
-        // 进货和赠送不计入员工收款
 
-        employeeStats[collector].transactionCount++;
-        employeeStats[collector].transactions.push(transaction);
+        employeeStats[key].transactionCount++;
+        employeeStats[key].transactions.push(transaction);
       });
 
       // 获取员工转账记录
@@ -88,12 +110,14 @@ class EmployeePaymentService {
       const allWithdrawals = await withdrawalService.getMerchantWithdrawals();
 
       // 计算每个员工的实际余额（收款总额 - 已转账金额）
+      // 使用规范化名字匹配，避免 "小梦" 与 "小梦 " 等导致匹配不到
       Object.keys(employeeStats).forEach(employeeName => {
-        const employeeTransfers = transfers.filter(t => t.employee_name === employeeName);
+        const normName = normalizeEmployeeName(employeeName);
+        const employeeTransfers = transfers.filter(t => normalizeEmployeeName(getTransferEmployeeName(t)) === normName);
         const totalTransferred = employeeTransfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
         
-        // 计算该员工的提现金额
-        const employeeWithdrawals = allWithdrawals.filter(w => w.merchant_name === employeeName);
+        // 计算该员工的提现金额（同样用规范化匹配）
+        const employeeWithdrawals = allWithdrawals.filter(w => normalizeEmployeeName(getWithdrawalMerchantName(w)) === normName);
         const totalWithdrawn = employeeWithdrawals.reduce((sum, w) => sum + parseFloat(w.amount), 0);
         
         // 获取员工角色信息来判断是否为管理员或商人
@@ -171,7 +195,7 @@ class EmployeePaymentService {
 
     try {
       const transferRecord = {
-        employee_name: transferData.employeeName,
+        employee_name: normalizeEmployeeName(transferData.employeeName ?? ''),
         amount: parseFloat(transferData.amount),
         transfer_date: transferData.transferDate || new Date().toISOString(),
         note: transferData.note || '',

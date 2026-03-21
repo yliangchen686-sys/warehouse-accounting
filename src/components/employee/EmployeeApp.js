@@ -11,8 +11,10 @@ import {
   DollarOutlined,
   CalendarOutlined,
   TrophyOutlined,
-  PhoneOutlined
+  PhoneOutlined,
+  FileAddOutlined
 } from '@ant-design/icons';
+import { Tabs } from 'antd';
 import { authService } from '../../services/authService';
 import { transactionService } from '../../services/transactionService';
 import EmployeeTransactionList from './EmployeeTransactionList';
@@ -20,6 +22,8 @@ import EmployeeSalary from './EmployeeSalary';
 import EmployeeTasks from './EmployeeTasks';
 import BonusPool from '../merchant/BonusPool';
 import CustomerData from './CustomerData';
+import TransactionRequestForm from './TransactionRequestForm';
+import TransactionRequestList from './TransactionRequestList';
 
 const { Header, Sider, Content } = Layout;
 
@@ -108,6 +112,24 @@ const EmployeeApp = ({ user, onLogout }) => {
         return <EmployeeTasks user={user} />;
       case 'customerData':
         return <CustomerData user={user} />;
+      case 'transactionRequest':
+        return (
+          <Tabs
+            defaultActiveKey="form"
+            items={[
+              {
+                key: 'form',
+                label: '提交申请',
+                children: <TransactionRequestForm user={user} onSuccess={() => {}} />
+              },
+              {
+                key: 'list',
+                label: '我的申请',
+                children: <TransactionRequestList user={user} />
+              }
+            ]}
+          />
+        );
       case 'bonusPool':
         return <BonusPool user={user} />;
       default:
@@ -155,6 +177,9 @@ const EmployeeApp = ({ user, onLogout }) => {
           </Menu.Item>
           <Menu.Item key="customerData" icon={<PhoneOutlined />}>
             客户数据
+          </Menu.Item>
+          <Menu.Item key="transactionRequest" icon={<FileAddOutlined />}>
+            申请交易
           </Menu.Item>
           <Menu.Item key="bonusPool" icon={<TrophyOutlined />}>
             奖金池

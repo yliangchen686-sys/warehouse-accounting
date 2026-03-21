@@ -13,8 +13,10 @@ import {
   DollarOutlined,
   GiftOutlined,
   TrophyOutlined,
-  PhoneOutlined
+  PhoneOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons';
+import { Tabs } from 'antd';
 import { authService } from '../../services/authService';
 import { transactionService } from '../../services/transactionService';
 import TransactionList from './TransactionList';
@@ -27,6 +29,8 @@ import SalaryManagement from './SalaryManagement';
 import BonusPool from './BonusPool';
 import Dashboard from './Dashboard';
 import CustomerDataManagement from './CustomerDataManagement';
+import PendingTransactionRequests from './PendingTransactionRequests';
+import TransactionRequestHistory from './TransactionRequestHistory';
 
 const { Header, Sider, Content } = Layout;
 
@@ -105,6 +109,24 @@ const MerchantApp = ({ user, onLogout }) => {
         return <Dashboard />;
       case 'transactions':
         return <TransactionList />;
+      case 'pendingRequests':
+        return (
+          <Tabs
+            defaultActiveKey="pending"
+            items={[
+              {
+                key: 'pending',
+                label: '待审核',
+                children: <PendingTransactionRequests user={user} />
+              },
+              {
+                key: 'history',
+                label: '审核历史',
+                children: <TransactionRequestHistory user={user} />
+              }
+            ]}
+          />
+        );
       case 'payments':
         return <EmployeePaymentManagement />;
       case 'customers':
@@ -158,6 +180,9 @@ const MerchantApp = ({ user, onLogout }) => {
           </Menu.Item>
           <Menu.Item key="transactions" icon={<ShoppingCartOutlined />}>
             交易记录
+          </Menu.Item>
+          <Menu.Item key="pendingRequests" icon={<CheckCircleOutlined />}>
+            待审核交易
           </Menu.Item>
           <Menu.Item key="payments" icon={<WalletOutlined />}>
             员工收款

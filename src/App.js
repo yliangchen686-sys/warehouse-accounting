@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Alert } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { authService } from './services/authService';
+import { supabase } from './config/supabase';
 import Login from './components/Login';
 import MerchantApp from './components/merchant/MerchantApp';
 import EmployeeApp from './components/employee/EmployeeApp';
@@ -17,6 +18,23 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState('merchant'); // 默认商人端
+  const [supabaseConnected, setSupabaseConnected] = useState(null); // null=检测中 true=已连接 false=未连接
+
+  // 检测 Supabase 是否可连接
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { error } = await supabase.from('employees').select('id').limit(1);
+        if (!cancelled) setSupabaseConnected(!error);
+        if (error) console.warn('Supabase 连接检测失败:', error.message);
+      } catch (e) {
+        if (!cancelled) setSupabaseConnected(false);
+        console.warn('Supabase 连接异常:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     // 从 URL 参数获取角色
@@ -72,6 +90,16 @@ function App() {
   return (
     <ConfigProvider locale={zhCN}>
       <div className="App">
+        {user && supabaseConnected === false && (
+          <Alert
+            type="warning"
+            showIcon
+            message="未连接到 Supabase"
+            description="当前仅显示本地数据，列表可能为空。请检查网络、Supabase 项目是否暂停，或打开浏览器控制台(F12)查看具体错误。"
+            style={{ marginBottom: 0, borderRadius: 0 }}
+            closable
+          />
+        )}
         {!user ? (
           <Login onLogin={handleLogin} userRole={userRole} />
         ) : (
