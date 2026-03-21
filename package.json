@@ -10,6 +10,7 @@
     "electron-dev": "concurrently \"cross-env BROWSER=none npm start\" \"wait-on http://localhost:3000 && electron .\"",
     "electron-only": "electron .",
     "electron-pack": "electron-builder",
+    "release:github": "npm run build && electron-builder --publish always",
     "build": "react-scripts build",
     "start": "react-scripts start",
     "start-browser": "react-scripts start",
