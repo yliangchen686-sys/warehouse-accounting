@@ -169,12 +169,14 @@ autoUpdater.on('update-available', (info) => {
   });
 });
 
-autoUpdater.on('update-not-available', () => {
-  console.log('当前已是最新版本');
+autoUpdater.on('update-not-available', (info) => {
+  const v = app.getVersion();
+  console.log('当前已是最新版本', { appVersion: v, remoteVersion: info?.version });
   dialog.showMessageBox({
     type: 'info',
     title: '检查更新',
-    message: '当前已是最新版本，无需更新。',
+    message:
+      `当前版本：${v}\n\n未检测到更高版本。electron-updater 只会对比「版本号」，不会根据代码是否改过判断。\n\n若要推送更新给用户，请：\n1. 提高 package.json 的 version（如 1.0.7）\n2. 重新打包并发布到 GitHub Releases（含 latest.yml 与 .exe 同批次）\n3. 旧版客户端版本号低于新版本时才会提示更新`,
     buttons: ['确定']
   });
 });

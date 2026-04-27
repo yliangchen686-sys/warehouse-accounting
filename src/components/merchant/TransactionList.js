@@ -8,6 +8,7 @@ import {
   DatePicker,
   Card,
   Popconfirm,
+  Modal,
   message,
   Tag,
   Row,
@@ -47,6 +48,15 @@ const TransactionList = () => {
   });
   const [stats, setStats] = useState(null);
   const [customerBindings, setCustomerBindings] = useState({});
+  const [customerStatsVisible, setCustomerStatsVisible] = useState(false);
+  const [customerStatsLoading, setCustomerStatsLoading] = useState(false);
+  const [customerStats, setCustomerStats] = useState({
+    customerName: '',
+    monthlyPurchase: 0,
+    monthlyReturn: 0,
+    totalPurchase: 0,
+    totalReturn: 0
+  });
 
   useEffect(() => {
     loadTransactions();
@@ -141,6 +151,66 @@ const TransactionList = () => {
       type: '',
       dateRange: null
     });
+  };
+
+  const handleShowCustomerStats = async () => {
+    const customerName = (filters.customerName || '').trim();
+    if (!customerName) {
+      message.warning('请先输入客户名称');
+      return;
+    }
+
+    setCustomerStatsVisible(true);
+    setCustomerStatsLoading(true);
+
+    try {
+      const customerTransactions = await transactionService.getTransactions({ customerName });
+      const lowerName = customerName.toLowerCase();
+
+      // 优先使用精确匹配，避免相似客户名互相干扰
+      const exactMatches = customerTransactions.filter(
+        (item) => (item.customer_name || '').trim().toLowerCase() === lowerName
+      );
+      const matchedTransactions = exactMatches.length > 0 ? exactMatches : customerTransactions;
+
+      let monthlyPurchase = 0;
+      let monthlyReturn = 0;
+      let totalPurchase = 0;
+      let totalReturn = 0;
+      const now = dayjs();
+
+      matchedTransactions.forEach((item) => {
+        const quantity = parseFloat(item.quantity) || 0;
+        const isCurrentMonth = dayjs(item.created_at).isSame(now, 'month');
+
+        if (item.type === 'sale') {
+          totalPurchase += quantity;
+          if (isCurrentMonth) {
+            monthlyPurchase += quantity;
+          }
+        }
+
+        if (item.type === 'return') {
+          totalReturn += quantity;
+          if (isCurrentMonth) {
+            monthlyReturn += quantity;
+          }
+        }
+      });
+
+      setCustomerStats({
+        customerName,
+        monthlyPurchase,
+        monthlyReturn,
+        totalPurchase,
+        totalReturn
+      });
+    } catch (error) {
+      console.error('加载客户统计失败:', error);
+      message.error('加载客户统计失败');
+    } finally {
+      setCustomerStatsLoading(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -352,7 +422,7 @@ const TransactionList = () => {
       {/* 筛选器 */}
       <Card size="small" style={{ marginBottom: 16 }}>
         <Row gutter={16} align="middle">
-          <Col xs={24} sm={8} md={6}>
+          <Col xs={24} sm={8} md={4}>
             <Input
               placeholder="搜索客户名称"
               prefix={<SearchOutlined />}
@@ -361,7 +431,7 @@ const TransactionList = () => {
               allowClear
             />
           </Col>
-          <Col xs={24} sm={8} md={6}>
+          <Col xs={24} sm={8} md={4}>
             <Select
               placeholder="选择交易类型"
               value={filters.type}
@@ -374,7 +444,7 @@ const TransactionList = () => {
               ))}
             </Select>
           </Col>
-          <Col xs={24} sm={8} md={8}>
+          <Col xs={24} sm={8} md={6}>
             <RangePicker
               value={filters.dateRange}
               onChange={(dates) => handleFilterChange('dateRange', dates)}
@@ -384,6 +454,13 @@ const TransactionList = () => {
           </Col>
           <Col xs={24} sm={24} md={4}>
             <Space>
+              <Button
+                type="primary"
+                onClick={handleShowCustomerStats}
+                loading={customerStatsLoading}
+              >
+                客户统计
+              </Button>
               <Button
                 icon={<ReloadOutlined />}
                 onClick={loadTransactions}
@@ -427,6 +504,28 @@ const TransactionList = () => {
           size="small"
         />
       </Card>
+
+      <Modal
+        title={`客户统计 - ${customerStats.customerName || '-'}`}
+        open={customerStatsVisible}
+        onCancel={() => setCustomerStatsVisible(false)}
+        footer={null}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Card size="small">
+            本月购买：{Math.floor(customerStats.monthlyPurchase)}（本月总的购买数量，不含赠送数量）
+          </Card>
+          <Card size="small">
+            本月回收：{Math.floor(customerStats.monthlyReturn)}（本月总的回收数量）
+          </Card>
+          <Card size="small">
+            总计购买：{Math.floor(customerStats.totalPurchase)}（历史总的购买数量，不含赠送数量）
+          </Card>
+          <Card size="small">
+            总计回收：{Math.floor(customerStats.totalReturn)}（历史总的回收数量）
+          </Card>
+        </Space>
+      </Modal>
     </div>
   );
 };
