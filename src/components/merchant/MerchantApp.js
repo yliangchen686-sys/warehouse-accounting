@@ -134,7 +134,6 @@ const MerchantApp = ({ user, onLogout }) => {
       window.removeEventListener('online', onOnline);
       clearInterval(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleLogout = () => {
