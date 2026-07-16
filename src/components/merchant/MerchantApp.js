@@ -7,18 +7,19 @@ import {
   LogoutOutlined,
   UserOutlined,
   PlusOutlined,
-  BarChartOutlined,
   WalletOutlined,
   LinkOutlined,
   DollarOutlined,
   GiftOutlined,
   TrophyOutlined,
   PhoneOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  CloudSyncOutlined
 } from '@ant-design/icons';
 import { Tabs } from 'antd';
 import { authService } from '../../services/authService';
 import { transactionService } from '../../services/transactionService';
+import { syncService } from '../../services/syncService';
 import TransactionList from './TransactionList';
 import TransactionForm from './TransactionForm';
 import EmployeeManagement from './EmployeeManagement';
@@ -39,6 +40,57 @@ const MerchantApp = ({ user, onLogout }) => {
   const [selectedKey, setSelectedKey] = useState('dashboard');
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [realtimeSubscription, setRealtimeSubscription] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  const refreshSyncStatus = () => {
+    const status = syncService.getSyncStatus();
+    setPendingSyncCount(status.pendingCount || 0);
+    return status;
+  };
+
+  const runSync = async ({ silent = false } = {}) => {
+    if (!syncService.canSync() || syncing) return null;
+
+    const before = refreshSyncStatus();
+    if (!before.needsSync) {
+      if (!silent) {
+        message.info('本地没有待同步数据');
+      }
+      return null;
+    }
+
+    setSyncing(true);
+    const hide = silent ? null : message.loading('正在同步本地数据到云端...', 0);
+    try {
+      const result = await syncService.syncAll({ silent });
+      refreshSyncStatus();
+
+      if (result?.skipped) {
+        return result;
+      }
+
+      if (result?.totalSynced > 0) {
+        message.success(result.message || `已同步 ${result.totalSynced} 条数据`);
+      } else if (result?.totalFailed > 0) {
+        message.warning(result.message || '同步失败，请检查网络后重试');
+      } else if (!silent) {
+        message.info(result?.message || '没有需要上传的新数据');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('同步失败:', error);
+      if (!silent) {
+        message.error(error.message || '同步失败');
+      }
+      return null;
+    } finally {
+      if (hide) hide();
+      setSyncing(false);
+      refreshSyncStatus();
+    }
+  };
 
   useEffect(() => {
     // 订阅实时交易记录更新
@@ -61,10 +113,38 @@ const MerchantApp = ({ user, onLogout }) => {
     };
   }, []);
 
+  // 登录进入管理端后自动同步；网络恢复时再试一次
+  useEffect(() => {
+    refreshSyncStatus();
+    runSync({ silent: true });
+
+    const onOnline = () => {
+      runSync({ silent: true });
+    };
+    window.addEventListener('online', onOnline);
+
+    const timer = setInterval(() => {
+      const status = refreshSyncStatus();
+      if (status.needsSync && navigator.onLine) {
+        runSync({ silent: true });
+      }
+    }, 5 * 60 * 1000);
+
+    return () => {
+      window.removeEventListener('online', onOnline);
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleLogout = () => {
     authService.logout();
     message.success('已安全退出');
     onLogout();
+  };
+
+  const handleManualSync = () => {
+    runSync({ silent: false });
   };
 
   const handleMenuClick = (key) => {
@@ -80,6 +160,8 @@ const MerchantApp = ({ user, onLogout }) => {
   const handleTransactionSubmit = () => {
     setShowTransactionForm(false);
     message.success('交易记录已保存');
+    // 若刚才因网络失败落在本地，立刻尝试推上云
+    runSync({ silent: true });
   };
 
   const userMenu = (
@@ -224,6 +306,15 @@ const MerchantApp = ({ user, onLogout }) => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Button
+              icon={<CloudSyncOutlined />}
+              onClick={handleManualSync}
+              loading={syncing}
+              size="large"
+            >
+              {pendingSyncCount > 0 ? `同步云端(${pendingSyncCount})` : '同步云端'}
+            </Button>
+
             <Button
               type="primary"
               icon={<PlusOutlined />}

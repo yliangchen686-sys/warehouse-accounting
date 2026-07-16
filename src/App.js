@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ConfigProvider, Alert } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { authService } from './services/authService';
+import { syncService } from './services/syncService';
 import { supabase } from './config/supabase';
 import Login from './components/Login';
 import MerchantApp from './components/merchant/MerchantApp';
@@ -63,8 +64,23 @@ function App() {
     setLoading(false);
   }, []);
 
-  const handleLogin = (userData) => {
+  const handleLogin = async (userData) => {
     setUser(userData);
+
+    // 商人/管理员登录后，立刻把本机离线数据推到 Supabase
+    if (
+      userData &&
+      (userData.role === 'merchant' || userData.role === 'admin' || userData.role === 'manager')
+    ) {
+      try {
+        const result = await syncService.syncAll({ silent: true });
+        if (result?.totalSynced > 0) {
+          console.log('[sync] 登录后已同步本地数据:', result.message);
+        }
+      } catch (e) {
+        console.warn('[sync] 登录后自动同步失败:', e.message || e);
+      }
+    }
   };
 
   const handleLogout = () => {
