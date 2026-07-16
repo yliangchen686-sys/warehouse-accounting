@@ -1,6 +1,6 @@
 {
   "name": "warehouse-accounting",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "仓储记账软件 - 商人端和员工端",
   "author": "仓储记账系统开发团队",
   "main": "public/electron.js",
@@ -67,7 +67,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": true,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
       "shortcutName": "仓储记账系统",
       "artifactName": "warehouse-accounting-setup-${version}.${ext}"

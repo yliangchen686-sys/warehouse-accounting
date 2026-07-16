@@ -1,9 +1,54 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const fs = require('fs');
 
 // 简化的开发环境检测，避免依赖 electron-is-dev
 const isDev = process.env.NODE_ENV === 'development' || process.defaultApp || /[\\/]electron-prebuilt[\\/]/.test(process.execPath) || /[\\/]electron[\\/]/.test(process.execPath);
+
+const SHORTCUT_NAME = '仓储记账系统.lnk';
+
+/**
+ * 更新后 NSIS 可能不会重建桌面快捷方式。
+ * 启动时检测并补建（用户桌面 + 公共桌面）。
+ */
+function ensureDesktopShortcut() {
+  if (process.platform !== 'win32' || isDev) {
+    return;
+  }
+
+  const target = process.execPath;
+  const options = {
+    target,
+    cwd: path.dirname(target),
+    description: '仓储记账系统',
+    icon: target,
+    iconIndex: 0
+  };
+
+  const desktopDirs = [
+    app.getPath('desktop'),
+    path.join(process.env.PUBLIC || 'C:\\Users\\Public', 'Desktop')
+  ];
+
+  for (const dir of [...new Set(desktopDirs.filter(Boolean))]) {
+    try {
+      if (!fs.existsSync(dir)) {
+        continue;
+      }
+      const shortcutPath = path.join(dir, SHORTCUT_NAME);
+      if (fs.existsSync(shortcutPath)) {
+        // 更新目标路径，避免指向旧安装目录
+        shell.writeShortcutLink(shortcutPath, 'update', options);
+      } else {
+        shell.writeShortcutLink(shortcutPath, 'create', options);
+      }
+      console.log('桌面快捷方式已就绪:', shortcutPath);
+    } catch (err) {
+      console.warn('创建/更新桌面快捷方式失败:', dir, err.message);
+    }
+  }
+}
 
 // 配置自动更新
 autoUpdater.autoDownload = false; // 不自动下载，先询问用户
@@ -305,6 +350,9 @@ app.whenReady().then(() => {
 
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
+
+  // 补建桌面快捷方式（修复自动更新后图标消失）
+  ensureDesktopShortcut();
 
   // 默认打开商人端
   createMerchantWindow();
