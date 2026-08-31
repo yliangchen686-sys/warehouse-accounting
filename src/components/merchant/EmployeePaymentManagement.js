@@ -17,6 +17,7 @@ import {
   Tabs,
   Alert,
   Popconfirm
+  Select
 } from 'antd';
 import {
   DollarOutlined,
@@ -34,7 +35,7 @@ import dayjs from 'dayjs';
 
 const { TabPane } = Tabs;
 
-const EmployeePaymentManagement = () => {
+const EmployeePaymentManagement = ({ user }) => {
   const [employeesSummary, setEmployeesSummary] = useState([]);
   const [transfers, setTransfers] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
@@ -48,7 +49,9 @@ const EmployeePaymentManagement = () => {
   const [withdrawalForm] = Form.useForm();
   const [balanceForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('summary');
-  const canManageBalance = authService.isAdmin();
+  const canManageBalance = user
+    ? (user.role === 'admin' || user.role === 'manager')
+    : authService.isAdmin();
 
   useEffect(() => {
     loadData();
@@ -96,9 +99,8 @@ const EmployeePaymentManagement = () => {
   };
 
   const handleAddBalance = (employee) => {
-    setSelectedEmployee(employee);
     balanceForm.setFieldsValue({
-      employeeName: employee.employeeName,
+      employeeName: employee?.employeeName,
       adjustmentDate: dayjs(),
       amount: null,
       note: ''
@@ -401,7 +403,8 @@ const EmployeePaymentManagement = () => {
           </Space>
         );
       },
-      width: 180
+      width: 200,
+      fixed: 'right'
     }
   ];
 
@@ -596,6 +599,16 @@ const EmployeePaymentManagement = () => {
     <div>
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ margin: 0, marginBottom: 16 }}>员工收款管理</h2>
+
+        {canManageBalance && (
+          <Alert
+            message="管理员操作"
+            description="可使用右上角「添加余额」按钮，或在表格右侧「操作」列中为指定员工添加余额。"
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
         
         <Alert
           message="收款计算说明"
@@ -662,15 +675,27 @@ const EmployeePaymentManagement = () => {
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         <TabPane tab="员工收款汇总" key="summary">
           <Card>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>员工收款统计</h3>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={loadData}
-                loading={loading}
-              >
-                刷新
-              </Button>
+              <Space>
+                {canManageBalance && (
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleAddBalance(null)}
+                    style={{ backgroundColor: '#13c2c2', borderColor: '#13c2c2' }}
+                  >
+                    添加余额
+                  </Button>
+                )}
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={loadData}
+                  loading={loading}
+                >
+                  刷新
+                </Button>
+              </Space>
             </div>
 
             <Table
@@ -678,6 +703,7 @@ const EmployeePaymentManagement = () => {
               dataSource={employeesSummary}
               rowKey="employeeName"
               loading={loading}
+              scroll={{ x: 1100 }}
               pagination={{
                 showSizeChanger: true,
                 showTotal: (total) => `共 ${total} 个员工`
@@ -958,8 +984,22 @@ const EmployeePaymentManagement = () => {
           layout="vertical"
           onFinish={handleBalanceSubmit}
         >
-          <Form.Item name="employeeName" label="员工姓名">
-            <Input disabled />
+          <Form.Item
+            name="employeeName"
+            label="员工姓名"
+            rules={[{ required: true, message: '请选择员工' }]}
+          >
+            <Select
+              showSearch
+              placeholder="选择要添加余额的员工"
+              optionFilterProp="children"
+            >
+              {employeesSummary.map((emp) => (
+                <Select.Option key={emp.employeeName} value={emp.employeeName}>
+                  {emp.employeeName}
+                </Select.Option>
+              ))}
+            </Select>
           </Form.Item>
 
           <Form.Item

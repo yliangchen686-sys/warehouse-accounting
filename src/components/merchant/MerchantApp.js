@@ -209,7 +209,7 @@ const MerchantApp = ({ user, onLogout }) => {
           />
         );
       case 'payments':
-        return <EmployeePaymentManagement />;
+        return <EmployeePaymentManagement user={user} />;
       case 'customers':
         return <CustomerBindingManagement />;
       case 'customerData':
