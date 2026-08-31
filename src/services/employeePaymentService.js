@@ -348,10 +348,10 @@ class EmployeePaymentService {
     }
   }
 
-  // 手动添加员工余额
+  // 手动添加员工余额（仅管理员）
   async addBalanceAdjustment(adjustmentData) {
-    if (!authService.isMerchant() && !authService.isAdmin()) {
-      throw new Error('只有商人或管理员可以添加余额');
+    if (!authService.isAdmin()) {
+      throw new Error('只有管理员可以添加余额');
     }
 
     const amount = parseFloat(adjustmentData.amount);
@@ -392,10 +392,10 @@ class EmployeePaymentService {
     }
   }
 
-  // 删除余额调整记录
+  // 删除余额调整记录（仅管理员）
   async deleteBalanceAdjustment(id) {
-    if (!authService.isMerchant() && !authService.isAdmin()) {
-      throw new Error('只有商人或管理员可以删除余额调整记录');
+    if (!authService.isAdmin()) {
+      throw new Error('只有管理员可以删除余额调整记录');
     }
 
     try {

@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons';
 import { employeePaymentService } from '../../services/employeePaymentService';
 import { withdrawalService } from '../../services/withdrawalService';
+import { authService } from '../../services/authService';
 import dayjs from 'dayjs';
 
 const { TabPane } = Tabs;
@@ -47,6 +48,7 @@ const EmployeePaymentManagement = () => {
   const [withdrawalForm] = Form.useForm();
   const [balanceForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('summary');
+  const canManageBalance = authService.isAdmin();
 
   useEffect(() => {
     loadData();
@@ -338,7 +340,7 @@ const EmployeePaymentManagement = () => {
       title: '操作',
       key: 'actions',
       render: (_, record) => {
-        const addBalanceButton = (
+        const addBalanceButton = canManageBalance ? (
           <Button
             size="small"
             icon={<PlusOutlined />}
@@ -347,7 +349,7 @@ const EmployeePaymentManagement = () => {
           >
             添加余额
           </Button>
-        );
+        ) : null;
 
         // 根据角色显示不同按钮
         if (record.role === 'manager' || record.role === 'admin' || record.employeeName === '管理员' || record.employeeName === '系统管理员') {
@@ -709,6 +711,7 @@ const EmployeePaymentManagement = () => {
           </Card>
         </TabPane>
 
+        {canManageBalance && (
         <TabPane tab="余额调整记录" key="adjustments">
           <Card>
             <div style={{ marginBottom: 16 }}>
@@ -729,6 +732,7 @@ const EmployeePaymentManagement = () => {
             />
           </Card>
         </TabPane>
+        )}
 
         <TabPane tab="提现记录" key="withdrawals">
           <Card>
