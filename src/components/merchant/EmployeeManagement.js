@@ -149,7 +149,9 @@ const EmployeeManagement = () => {
   };
 
   const getRoleColor = (role) => {
-    return role === 'merchant' ? 'blue' : 'orange';
+    if (role === 'merchant') return 'blue';
+    if (role === 'admin' || role === 'manager') return 'purple';
+    return 'orange';
   };
 
   const columns = [
@@ -215,7 +217,7 @@ const EmployeeManagement = () => {
             编辑
           </Button>
           
-          {record.role !== 'merchant' && (
+          {record.role !== 'merchant' && record.role !== 'admin' && record.role !== 'manager' && (
             <>
               {record.status === 'active' ? (
                 <Popconfirm
@@ -361,6 +363,7 @@ const EmployeeManagement = () => {
             <Select placeholder="请选择角色">
               <Option value="employee">员工</Option>
               <Option value="merchant">商人</Option>
+              <Option value="admin">管理员</Option>
             </Select>
           </Form.Item>
 
