@@ -22,7 +22,8 @@ import {
   ReloadOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  PlusCircleOutlined
 } from '@ant-design/icons';
 import { bonusPoolService } from '../../services/bonusPoolService';
 import { authService } from '../../services/authService';
@@ -33,8 +34,11 @@ const BonusPool = ({ user }) => {
   const [deductions, setDeductions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [deductModalVisible, setDeductModalVisible] = useState(false);
+  const [addModalVisible, setAddModalVisible] = useState(false);
   const [deductAmount, setDeductAmount] = useState(null);
+  const [addAmount, setAddAmount] = useState(null);
   const [deducting, setDeducting] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const isMerchant = authService.isMerchant() || authService.isAdmin();
   const isEmployee = authService.isEmployee();
@@ -64,6 +68,37 @@ const BonusPool = ({ user }) => {
     // 直接打开Modal，让用户输入金额
     setDeductModalVisible(true);
     setDeductAmount(null); // 重置金额
+  };
+
+  const handleAddBonus = () => {
+    setAddModalVisible(true);
+    setAddAmount(null);
+  };
+
+  const handleConfirmAdd = async () => {
+    if (!addAmount || addAmount <= 0) {
+      message.warning('请输入有效的添加金额');
+      return;
+    }
+
+    setAdding(true);
+    try {
+      const currentUser = authService.getCurrentUser();
+      await bonusPoolService.addBonus(
+        addAmount,
+        currentUser.id || currentUser.name,
+        currentUser.name
+      );
+      message.success('添加奖金成功');
+      setAddModalVisible(false);
+      setAddAmount(null);
+      await loadData();
+    } catch (error) {
+      console.error('添加奖金失败:', error);
+      message.error(error.message || '添加奖金失败');
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleConfirmDeduct = async () => {
@@ -139,19 +174,33 @@ const BonusPool = ({ user }) => {
 
   const deductionColumns = [
     {
-      title: '扣款时间',
+      title: '时间',
       dataIndex: 'created_at',
       key: 'created_at',
       render: (text) => formatDate(text),
       width: 180
     },
     {
-      title: '扣除金额',
+      title: '类型',
+      dataIndex: 'deduction_amount',
+      key: 'type',
+      render: (amount) => (
+        <Tag color={amount < 0 ? 'success' : 'error'}>
+          {amount < 0 ? '添加' : '扣款'}
+        </Tag>
+      ),
+      width: 80
+    },
+    {
+      title: '金额',
       dataIndex: 'deduction_amount',
       key: 'deduction_amount',
       render: (amount) => (
-        <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-          -{formatCurrency(amount)}
+        <span style={{
+          color: amount < 0 ? '#52c41a' : '#ff4d4f',
+          fontWeight: 'bold'
+        }}>
+          {amount < 0 ? '+' : '-'}{formatCurrency(Math.abs(amount))}
         </span>
       ),
       align: 'right',
@@ -164,7 +213,7 @@ const BonusPool = ({ user }) => {
       width: 120
     },
     {
-      title: '扣款后余额',
+      title: '操作后余额',
       dataIndex: 'remaining_balance',
       key: 'remaining_balance',
       render: (balance) => formatCurrency(balance),
@@ -199,6 +248,13 @@ const BonusPool = ({ user }) => {
                 type="default"
               >
                 初始化数据
+              </Button>
+              <Button
+                icon={<PlusCircleOutlined />}
+                onClick={handleAddBonus}
+                style={{ marginRight: 8 }}
+              >
+                添加奖金
               </Button>
               <Button
                 type="primary"
@@ -357,6 +413,11 @@ const BonusPool = ({ user }) => {
                     累计已扣款：{formatCurrency(bonusPoolData.totalDeductions)}
                   </div>
                 )}
+                {bonusPoolData.totalAdditions > 0 && (
+                  <div style={{ marginTop: 4, color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
+                    累计手动添加：{formatCurrency(bonusPoolData.totalAdditions)}
+                  </div>
+                )}
               </Card>
 
               {/* 计算明细 */}
@@ -400,6 +461,11 @@ const BonusPool = ({ user }) => {
                       -{formatCurrency(bonusPoolData.totalDeductions)}
                     </span>
                   </Descriptions.Item>
+                  <Descriptions.Item label="累计手动添加">
+                    <span style={{ color: '#3f8600' }}>
+                      +{formatCurrency(bonusPoolData.totalAdditions || 0)}
+                    </span>
+                  </Descriptions.Item>
                   <Descriptions.Item label="累计余额">
                     <Tag color={bonusPoolData.currentBalance > 0 ? 'success' : 'default'} style={{ fontSize: 18, fontWeight: 'bold' }}>
                       {formatCurrency(bonusPoolData.currentBalance)}
@@ -414,7 +480,7 @@ const BonusPool = ({ user }) => {
 
       {/* 扣款记录 - 仅商人端显示 */}
       {!isEmployee && (
-        <Card title="扣款记录">
+        <Card title="扣款/添加记录">
           <Table
             columns={deductionColumns}
             dataSource={deductions}
@@ -426,7 +492,7 @@ const BonusPool = ({ user }) => {
               showTotal: (total) => `共 ${total} 条记录`
             }}
             locale={{
-              emptyText: '暂无扣款记录'
+              emptyText: '暂无扣款或添加记录'
             }}
           />
         </Card>
@@ -473,6 +539,43 @@ const BonusPool = ({ user }) => {
               扣款金额不能超过当前余额
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        title="添加奖金"
+        open={addModalVisible}
+        onOk={handleConfirmAdd}
+        onCancel={() => {
+          setAddModalVisible(false);
+          setAddAmount(null);
+        }}
+        confirmLoading={adding}
+        okText="确认添加"
+        cancelText="取消"
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Alert
+            message="添加奖金"
+            description={`当前奖金池余额：${bonusPoolData ? formatCurrency(bonusPoolData.currentBalance) : '0.00'}`}
+            type="success"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
+            添加金额（元）
+          </label>
+          <InputNumber
+            style={{ width: '100%' }}
+            placeholder="请输入添加金额"
+            min={0.01}
+            precision={2}
+            value={addAmount}
+            onChange={(value) => setAddAmount(value)}
+            prefix={<DollarOutlined />}
+          />
         </div>
       </Modal>
     </div>

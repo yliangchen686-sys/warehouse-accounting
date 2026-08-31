@@ -61,14 +61,21 @@ class BonusPoolService {
       // 同时获取本月之前的累计奖金池余额
       const { cumulativeBonusPool, previousCumulativeBonusPool } = await this.getCumulativeBonusPoolOptimizedWithPrevious(targetYear, targetMonth, monthlyBonusPool);
 
-      // 获取所有历史扣款记录（不分年月）
+      // 获取所有历史扣款/添加记录（不分年月）
       const allDeductions = await this.getAllDeductions();
-      const totalDeductions = allDeductions.reduce((sum, deduction) => {
-        return sum + (parseFloat(deduction.deduction_amount) || 0);
-      }, 0);
+      let totalDeductions = 0;
+      let totalAdditions = 0;
+      allDeductions.forEach((deduction) => {
+        const amount = parseFloat(deduction.deduction_amount) || 0;
+        if (amount > 0) {
+          totalDeductions += amount;
+        } else if (amount < 0) {
+          totalAdditions += Math.abs(amount);
+        }
+      });
 
-      // 计算当前奖金池余额（累计奖金池 - 累计已扣款）
-      const currentBalance = cumulativeBonusPool - totalDeductions;
+      // 计算当前奖金池余额（累计奖金池 - 扣款 + 手动添加）
+      const currentBalance = cumulativeBonusPool - totalDeductions + totalAdditions;
 
       // 保存或更新当月数据到缓存表
       await this.saveMonthlyBonusPoolToCache({
@@ -94,6 +101,7 @@ class BonusPoolService {
         previousCumulativeBonusPool, // 本月之前累计奖金池余额
         cumulativeBonusPool, // 累计奖金池
         totalDeductions, // 累计已扣款
+        totalAdditions, // 累计手动添加
         currentBalance, // 累计余额
         calculatedAt: new Date().toISOString()
       };
@@ -442,6 +450,56 @@ class BonusPoolService {
       return cumulativeBonusPool;
     } catch (error) {
       console.error('重新计算所有历史月份奖金池失败:', error);
+      throw error;
+    }
+  }
+
+  // 手动添加奖金（写入扣款表为负数，参与余额汇总计算）
+  async addBonus(amount, operatorId, operatorName) {
+    try {
+      if (!amount || amount <= 0) {
+        throw new Error('添加金额必须大于0');
+      }
+
+      const bonusPoolData = await this.calculateBonusPool();
+      const remainingBalance = bonusPoolData.currentBalance + parseFloat(amount);
+
+      const additionRecord = {
+        deduction_amount: -parseFloat(amount),
+        operator_id: operatorId,
+        operator_name: operatorName,
+        remaining_balance: remainingBalance,
+        year: bonusPoolData.year,
+        month: bonusPoolData.month,
+        created_at: new Date().toISOString()
+      };
+
+      try {
+        const { data, error } = await supabase
+          .from('bonus_deduction_log')
+          .insert([additionRecord])
+          .select();
+
+        if (error) {
+          throw error;
+        }
+
+        return data[0];
+      } catch (dbError) {
+        console.warn('数据库保存添加奖金记录失败，使用本地存储:', dbError);
+
+        const localDeductions = JSON.parse(localStorage.getItem('localBonusDeductions') || '[]');
+        const localRecord = {
+          ...additionRecord,
+          id: Date.now()
+        };
+        localDeductions.push(localRecord);
+        localStorage.setItem('localBonusDeductions', JSON.stringify(localDeductions));
+
+        return localRecord;
+      }
+    } catch (error) {
+      console.error('添加奖金失败:', error);
       throw error;
     }
   }

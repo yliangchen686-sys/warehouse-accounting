@@ -37,12 +37,15 @@ const EmployeePaymentManagement = () => {
   const [employeesSummary, setEmployeesSummary] = useState([]);
   const [transfers, setTransfers] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
+  const [balanceAdjustments, setBalanceAdjustments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [withdrawalModalVisible, setWithdrawalModalVisible] = useState(false);
+  const [balanceModalVisible, setBalanceModalVisible] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [form] = Form.useForm();
   const [withdrawalForm] = Form.useForm();
+  const [balanceForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('summary');
 
   useEffect(() => {
@@ -52,14 +55,16 @@ const EmployeePaymentManagement = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [summary, transferHistory, withdrawalHistory] = await Promise.all([
+      const [summary, transferHistory, withdrawalHistory, adjustmentHistory] = await Promise.all([
         employeePaymentService.getAllEmployeesSummary(),
         employeePaymentService.getEmployeeTransfers(),
-        withdrawalService.getMerchantWithdrawals()
+        withdrawalService.getMerchantWithdrawals(),
+        employeePaymentService.getBalanceAdjustments()
       ]);
       setEmployeesSummary(summary);
       setTransfers(transferHistory);
       setWithdrawals(withdrawalHistory);
+      setBalanceAdjustments(adjustmentHistory);
     } catch (error) {
       message.error('加载数据失败');
       console.error(error);
@@ -86,6 +91,47 @@ const EmployeePaymentManagement = () => {
       amount: employee.currentBalance
     });
     setWithdrawalModalVisible(true);
+  };
+
+  const handleAddBalance = (employee) => {
+    setSelectedEmployee(employee);
+    balanceForm.setFieldsValue({
+      employeeName: employee.employeeName,
+      adjustmentDate: dayjs(),
+      amount: null,
+      note: ''
+    });
+    setBalanceModalVisible(true);
+  };
+
+  const handleBalanceSubmit = async (values) => {
+    try {
+      await employeePaymentService.addBalanceAdjustment({
+        employeeName: values.employeeName,
+        amount: values.amount,
+        adjustmentDate: values.adjustmentDate.toISOString(),
+        note: values.note
+      });
+
+      message.success('余额添加成功');
+      setBalanceModalVisible(false);
+      balanceForm.resetFields();
+      loadData();
+    } catch (error) {
+      message.error(error.message || '添加余额失败');
+      console.error(error);
+    }
+  };
+
+  const handleDeleteBalanceAdjustment = async (id) => {
+    try {
+      await employeePaymentService.deleteBalanceAdjustment(id);
+      message.success('删除余额调整记录成功');
+      loadData();
+    } catch (error) {
+      message.error('删除余额调整记录失败');
+      console.error(error);
+    }
   };
 
   const handleTransferSubmit = async (values) => {
@@ -239,6 +285,18 @@ const EmployeePaymentManagement = () => {
       sorter: (a, b) => a.totalTransferred - b.totalTransferred
     },
     {
+      title: '手动添加',
+      dataIndex: 'totalAdjustments',
+      key: 'totalAdjustments',
+      render: (amount) => (
+        <span style={{ color: '#13c2c2' }}>
+          {formatCurrency(amount || 0)}
+        </span>
+      ),
+      width: 110,
+      sorter: (a, b) => (a.totalAdjustments || 0) - (b.totalAdjustments || 0)
+    },
+    {
       title: '当前余额',
       dataIndex: 'currentBalance',
       key: 'currentBalance',
@@ -280,38 +338,55 @@ const EmployeePaymentManagement = () => {
       title: '操作',
       key: 'actions',
       render: (_, record) => {
+        const addBalanceButton = (
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => handleAddBalance(record)}
+            style={{ marginRight: 8 }}
+          >
+            添加余额
+          </Button>
+        );
+
         // 根据角色显示不同按钮
         if (record.role === 'manager' || record.role === 'admin' || record.employeeName === '管理员' || record.employeeName === '系统管理员') {
-          // 管理员显示提现按钮
           return (
-            <Button
-              type="primary"
-              size="small"
-              icon={<BankOutlined />}
-              onClick={() => handleWithdraw(record)}
-              disabled={record.currentBalance <= 0}
-              style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
-            >
-              提现
-            </Button>
+            <Space size="small">
+              {addBalanceButton}
+              <Button
+                type="primary"
+                size="small"
+                icon={<BankOutlined />}
+                onClick={() => handleWithdraw(record)}
+                disabled={record.currentBalance <= 0}
+                style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
+              >
+                提现
+              </Button>
+            </Space>
           );
         } else if (record.role === 'merchant' || record.employeeName === '商人') {
-          // 商人显示提现按钮
           return (
-            <Button
-              type="primary"
-              size="small"
-              icon={<BankOutlined />}
-              onClick={() => handleWithdraw(record)}
-              disabled={record.currentBalance <= 0}
-              style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
-            >
-              提现
-            </Button>
+            <Space size="small">
+              {addBalanceButton}
+              <Button
+                type="primary"
+                size="small"
+                icon={<BankOutlined />}
+                onClick={() => handleWithdraw(record)}
+                disabled={record.currentBalance <= 0}
+                style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
+              >
+                提现
+              </Button>
+            </Space>
           );
-        } else {
-          // 员工显示转账按钮
-          return (
+        }
+
+        return (
+          <Space size="small">
+            {addBalanceButton}
             <Button
               type="primary"
               size="small"
@@ -321,10 +396,10 @@ const EmployeePaymentManagement = () => {
             >
               转账
             </Button>
-          );
-        }
+          </Space>
+        );
       },
-      width: 80
+      width: 180
     }
   ];
 
@@ -383,6 +458,65 @@ const EmployeePaymentManagement = () => {
             icon={<DeleteOutlined />}
             size="small"
           >
+            删除
+          </Button>
+        </Popconfirm>
+      ),
+      width: 80,
+      fixed: 'right'
+    }
+  ];
+
+  const balanceAdjustmentColumns = [
+    {
+      title: '添加时间',
+      dataIndex: 'adjustment_date',
+      key: 'adjustment_date',
+      render: (date, record) => dayjs(date || record.created_at).format('YYYY-MM-DD HH:mm'),
+      width: 150
+    },
+    {
+      title: '员工姓名',
+      dataIndex: 'employee_name',
+      key: 'employee_name',
+      width: 120
+    },
+    {
+      title: '添加金额',
+      dataIndex: 'amount',
+      key: 'amount',
+      render: (amount) => (
+        <span style={{ fontWeight: 'bold', color: '#13c2c2' }}>
+          +{formatCurrency(amount)}
+        </span>
+      ),
+      width: 120,
+      sorter: (a, b) => a.amount - b.amount
+    },
+    {
+      title: '备注',
+      dataIndex: 'note',
+      key: 'note',
+      ellipsis: true
+    },
+    {
+      title: '记录时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date) => dayjs(date).format('MM-DD HH:mm'),
+      width: 120
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_, record) => (
+        <Popconfirm
+          title="确定要删除这条余额调整记录吗？"
+          onConfirm={() => handleDeleteBalanceAdjustment(record.id)}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Button type="link" danger icon={<DeleteOutlined />} size="small">
             删除
           </Button>
         </Popconfirm>
@@ -569,6 +703,27 @@ const EmployeePaymentManagement = () => {
               pagination={{
                 showSizeChanger: true,
                 showTotal: (total) => `共 ${total} 条转账记录`
+              }}
+              size="small"
+            />
+          </Card>
+        </TabPane>
+
+        <TabPane tab="余额调整记录" key="adjustments">
+          <Card>
+            <div style={{ marginBottom: 16 }}>
+              <Button icon={<ReloadOutlined />} onClick={loadData}>
+                刷新记录
+              </Button>
+            </div>
+
+            <Table
+              columns={balanceAdjustmentColumns}
+              dataSource={balanceAdjustments}
+              rowKey="id"
+              pagination={{
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 条余额调整记录`
               }}
               size="small"
             />
@@ -776,6 +931,74 @@ const EmployeePaymentManagement = () => {
               <Button onClick={() => {
                 setWithdrawalModalVisible(false);
                 withdrawalForm.resetFields();
+              }}>
+                取消
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="添加员工余额"
+        open={balanceModalVisible}
+        onCancel={() => {
+          setBalanceModalVisible(false);
+          balanceForm.resetFields();
+        }}
+        footer={null}
+        width={500}
+      >
+        <Form
+          form={balanceForm}
+          layout="vertical"
+          onFinish={handleBalanceSubmit}
+        >
+          <Form.Item name="employeeName" label="员工姓名">
+            <Input disabled />
+          </Form.Item>
+
+          <Form.Item
+            name="amount"
+            label="添加金额"
+            rules={[
+              { required: true, message: '请输入添加金额' },
+              { type: 'number', min: 0.01, message: '添加金额必须大于0' }
+            ]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              precision={2}
+              min={0}
+              formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={value => value.replace(/¥\s?|(,*)/g, '')}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="adjustmentDate"
+            label="调整日期"
+            rules={[{ required: true, message: '请选择调整日期' }]}
+          >
+            <DatePicker
+              style={{ width: '100%' }}
+              format="YYYY-MM-DD"
+              placeholder="选择调整日期"
+            />
+          </Form.Item>
+
+          <Form.Item name="note" label="备注">
+            <Input.TextArea rows={3} placeholder="调整备注信息（可选）" />
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                确认添加
+              </Button>
+              <Button onClick={() => {
+                setBalanceModalVisible(false);
+                balanceForm.resetFields();
               }}>
                 取消
               </Button>

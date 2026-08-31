@@ -105,6 +105,9 @@ class EmployeePaymentService {
 
       // 获取员工转账记录
       const transfers = await this.getEmployeeTransfers();
+
+      // 获取余额调整记录
+      const balanceAdjustments = await this.getBalanceAdjustments();
       
       // 获取所有提现记录
       const allWithdrawals = await withdrawalService.getMerchantWithdrawals();
@@ -119,6 +122,14 @@ class EmployeePaymentService {
         // 计算该员工的提现金额（同样用规范化匹配）
         const employeeWithdrawals = allWithdrawals.filter(w => normalizeEmployeeName(getWithdrawalMerchantName(w)) === normName);
         const totalWithdrawn = employeeWithdrawals.reduce((sum, w) => sum + parseFloat(w.amount), 0);
+
+        const employeeAdjustments = balanceAdjustments.filter(
+          a => normalizeEmployeeName(a.employee_name ?? a.employeeName) === normName
+        );
+        const totalAdjustments = employeeAdjustments.reduce(
+          (sum, a) => sum + (parseFloat(a.amount) || 0),
+          0
+        );
         
         // 获取员工角色信息来判断是否为管理员或商人
         const isAdmin = employeeName === '管理员' || employeeName === '系统管理员';
@@ -134,8 +145,9 @@ class EmployeePaymentService {
             
             employeeStats[employeeName].totalAmount = totalIncome;
             employeeStats[employeeName].totalWithdrawn = totalWithdrawn;
-            employeeStats[employeeName].currentBalance = totalIncome - totalWithdrawn;
+            employeeStats[employeeName].currentBalance = totalIncome - totalWithdrawn + totalAdjustments;
             employeeStats[employeeName].totalTransferred = 0; // 管理员不需要转账
+            employeeStats[employeeName].totalAdjustments = totalAdjustments;
             
             console.log(`管理员 ${employeeName} 余额计算:`, {
               salesAmount,
@@ -147,32 +159,36 @@ class EmployeePaymentService {
           } else if (isMerchant) {
             // 商人：当前余额 = 销售收款 - 回收金额 - 转账金额 - 提现金额
             const salesAmount = employeeStats[employeeName].totalAmount; // 销售收款 - 回收金额
-            const currentBalance = salesAmount - totalTransferred - totalWithdrawn;
+            const currentBalance = salesAmount - totalTransferred - totalWithdrawn + totalAdjustments;
             
             console.log(`商人 ${employeeName} 余额计算:`, {
               salesAmount,
               totalTransferred,
               totalWithdrawn,
+              totalAdjustments,
               currentBalance
             });
             
             // 设置商人的转账金额、提现金额和余额
             employeeStats[employeeName].totalTransferred = totalTransferred;
             employeeStats[employeeName].totalWithdrawn = totalWithdrawn;
+            employeeStats[employeeName].totalAdjustments = totalAdjustments;
             employeeStats[employeeName].currentBalance = currentBalance;
           }
         } else {
           // 普通员工的余额计算 - 转账后余额应该减少
           const originalAmount = employeeStats[employeeName].totalAmount;
-          const currentBalance = originalAmount - totalTransferred;
+          const currentBalance = originalAmount - totalTransferred + totalAdjustments;
           
           console.log(`员工 ${employeeName} 余额计算:`, {
             originalAmount,
             totalTransferred,
+            totalAdjustments,
             currentBalance
           });
           
           employeeStats[employeeName].totalTransferred = totalTransferred;
+          employeeStats[employeeName].totalAdjustments = totalAdjustments;
           employeeStats[employeeName].currentBalance = currentBalance;
           employeeStats[employeeName].totalWithdrawn = 0; // 员工不能提现
         }
@@ -287,6 +303,7 @@ class EmployeePaymentService {
         totalAmount: employee.totalAmount,
         totalTransferred: employee.totalTransferred || 0,
         totalWithdrawn: employee.totalWithdrawn || 0, // 添加提现金额
+        totalAdjustments: employee.totalAdjustments || 0,
         currentBalance: employee.currentBalance || employee.totalAmount,
         transactionCount: employee.transactionCount,
         role: employeeRoles[employee.employeeName] || 'employee' // 添加角色信息
@@ -298,6 +315,104 @@ class EmployeePaymentService {
       return summary;
     } catch (error) {
       console.error('获取员工收款汇总失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取余额调整记录
+  async getBalanceAdjustments() {
+    try {
+      let adjustments = [];
+
+      try {
+        const { data, error } = await supabase
+          .from('employee_balance_adjustments')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          adjustments = data;
+        }
+      } catch (dbError) {
+        console.warn('从数据库获取余额调整记录失败:', dbError);
+      }
+
+      const localAdjustments = JSON.parse(localStorage.getItem('localEmployeeBalanceAdjustments') || '[]');
+      const allAdjustments = [...adjustments, ...localAdjustments];
+      allAdjustments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      return allAdjustments;
+    } catch (error) {
+      console.error('获取余额调整记录失败:', error);
+      return JSON.parse(localStorage.getItem('localEmployeeBalanceAdjustments') || '[]');
+    }
+  }
+
+  // 手动添加员工余额
+  async addBalanceAdjustment(adjustmentData) {
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以添加余额');
+    }
+
+    const amount = parseFloat(adjustmentData.amount);
+    if (!amount || amount <= 0) {
+      throw new Error('添加金额必须大于0');
+    }
+
+    const adjustmentRecord = {
+      employee_name: normalizeEmployeeName(adjustmentData.employeeName ?? ''),
+      amount,
+      note: adjustmentData.note || '',
+      operator_name: adjustmentData.operatorName || '',
+      adjustment_date: adjustmentData.adjustmentDate || new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from('employee_balance_adjustments')
+        .insert([adjustmentRecord])
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      return data[0];
+    } catch (dbError) {
+      console.warn('数据库保存余额调整失败，使用本地存储:', dbError);
+      const localAdjustments = JSON.parse(localStorage.getItem('localEmployeeBalanceAdjustments') || '[]');
+      const localRecord = {
+        ...adjustmentRecord,
+        id: Date.now()
+      };
+      localAdjustments.push(localRecord);
+      localStorage.setItem('localEmployeeBalanceAdjustments', JSON.stringify(localAdjustments));
+      return localRecord;
+    }
+  }
+
+  // 删除余额调整记录
+  async deleteBalanceAdjustment(id) {
+    if (!authService.isMerchant() && !authService.isAdmin()) {
+      throw new Error('只有商人或管理员可以删除余额调整记录');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('employee_balance_adjustments')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        const localAdjustments = JSON.parse(localStorage.getItem('localEmployeeBalanceAdjustments') || '[]');
+        const filtered = localAdjustments.filter(item => item.id !== id);
+        localStorage.setItem('localEmployeeBalanceAdjustments', JSON.stringify(filtered));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('删除余额调整记录失败:', error);
       throw error;
     }
   }
