@@ -206,7 +206,36 @@ class EmployeePaymentService {
         employeeStats[employeeName].transfers = employeeTransfers;
       });
 
-      return employeeName ? employeeStats[employeeName] : employeeStats;
+      if (employeeName) {
+        const norm = normalizeEmployeeName(employeeName);
+        const stat = employeeStats[norm] ?? employeeStats[employeeName];
+        if (stat) {
+          return stat;
+        }
+
+        // 该员工 7/30 后无收款流水，但仍可能有转账/期初调账
+        const employeeTransfers = transfers.filter(
+          (t) => normalizeEmployeeName(getTransferEmployeeName(t)) === norm
+        );
+        const totalTransferred = employeeTransfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+        const totalAdjustments = (OPENING_BALANCE_ADJUSTMENTS[norm] ?? OPENING_BALANCE_ADJUSTMENTS[employeeName] ?? 0)
+          + balanceAdjustments
+            .filter((a) => normalizeEmployeeName(a.employee_name ?? a.employeeName) === norm)
+            .reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+
+        return {
+          employeeName: norm || employeeName,
+          totalAmount: 0,
+          totalTransferred,
+          totalAdjustments,
+          currentBalance: 0 - totalTransferred + totalAdjustments,
+          transactionCount: 0,
+          totalWithdrawn: 0,
+          transfers: employeeTransfers
+        };
+      }
+
+      return employeeStats;
     } catch (error) {
       console.error('获取员工收款统计失败:', error);
       throw error;
