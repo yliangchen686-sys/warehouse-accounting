@@ -108,7 +108,7 @@ const EmployeeSalary = ({ user }) => {
         
         <Alert
           message={`${user.name} 的工资明细`}
-          description="工资 = 底薪(¥3000) + 提成(销售数量×¥0.7) + 奖金(按销售量阶梯)，赠送数量不计入工资计算。"
+          description={`工资 = 底薪(¥${salaryData.baseSalary.toLocaleString()}) + 提成(销售数量×¥0.7) + 奖金(按销售量阶梯)，赠送数量不计入工资计算。`}
           type="info"
           showIcon
           style={{ marginBottom: 16 }}

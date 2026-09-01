@@ -5,7 +5,6 @@ import {
   Row,
   Col,
   Button,
-  DatePicker,
   message,
   Statistic,
   Tag,
@@ -17,9 +16,7 @@ import {
   Select,
   Modal,
   Form,
-  Input,
-  InputNumber,
-  Popconfirm
+  InputNumber
 } from 'antd';
 import {
   DollarOutlined,
@@ -28,8 +25,7 @@ import {
   ReloadOutlined,
   GiftOutlined,
   RiseOutlined,
-  EditOutlined,
-  DeleteOutlined
+  EditOutlined
 } from '@ant-design/icons';
 import { salaryService } from '../../services/salaryService';
 import { authService } from '../../services/authService';
@@ -40,7 +36,6 @@ const { Option } = Select;
 
 const SalaryManagement = ({ user }) => {
   const [salaries, setSalaries] = useState([]);
-  const [salaryAdjustments, setSalaryAdjustments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [monthOptions, setMonthOptions] = useState([]);
@@ -75,12 +70,8 @@ const SalaryManagement = ({ user }) => {
     try {
       const year = selectedDate.year();
       const month = selectedDate.month() + 1;
-      const [data, adjustments] = await Promise.all([
-        salaryService.getAllEmployeesMonthlySalary(year, month),
-        salaryService.getSalaryAdjustments(year, month)
-      ]);
+      const data = await salaryService.getAllEmployeesMonthlySalary(year, month);
       setSalaries(data);
-      setSalaryAdjustments(adjustments);
     } catch (error) {
       message.error('加载工资数据失败');
       console.error(error);
@@ -89,42 +80,23 @@ const SalaryManagement = ({ user }) => {
     }
   };
 
-  const handleAdjustSalary = (record = null) => {
+  const handleAdjustBaseSalary = (record = null) => {
     adjustForm.setFieldsValue({
       employeeName: record?.employeeName,
-      amount: null,
-      note: ''
+      baseSalary: record?.baseSalary ?? salaryService.BASE_SALARY
     });
     setAdjustModalVisible(true);
   };
 
   const handleAdjustSubmit = async (values) => {
     try {
-      const currentUser = authService.getCurrentUser();
-      await salaryService.addSalaryAdjustment({
-        employeeName: values.employeeName,
-        year: selectedDate.year(),
-        month: selectedDate.month() + 1,
-        amount: values.amount,
-        note: values.note,
-        operatorName: currentUser?.name || ''
-      });
-      message.success('工资调整已保存');
+      await salaryService.updateEmployeeBaseSalary(values.employeeName, values.baseSalary);
+      message.success('底薪已更新，之后每月工资将按新底薪计算');
       setAdjustModalVisible(false);
       adjustForm.resetFields();
       loadSalaries();
     } catch (error) {
-      message.error(error.message || '工资调整失败');
-    }
-  };
-
-  const handleDeleteAdjustment = async (id) => {
-    try {
-      await salaryService.deleteSalaryAdjustment(id);
-      message.success('已删除工资调整记录');
-      loadSalaries();
-    } catch (error) {
-      message.error(error.message || '删除失败');
+      message.error(error.message || '调整底薪失败');
     }
   };
 
@@ -151,14 +123,19 @@ const SalaryManagement = ({ user }) => {
     return { level: '需提升', color: '#f5222d' };
   };
 
-  // 计算总统计
   const totalStats = salaries.reduce((acc, salary) => ({
     totalSalary: acc.totalSalary + salary.totalSalary,
     totalCommission: acc.totalCommission + salary.commission,
     totalBonus: acc.totalBonus + salary.bonus,
-    totalSalesQuantity: acc.totalSalesQuantity + salary.totalSalesQuantity,
-    totalAdjustment: acc.totalAdjustment + (salary.adjustmentAmount || 0)
-  }), { totalSalary: 0, totalCommission: 0, totalBonus: 0, totalSalesQuantity: 0, totalAdjustment: 0 });
+    totalBaseSalary: acc.totalBaseSalary + salary.baseSalary,
+    totalSalesQuantity: acc.totalSalesQuantity + salary.totalSalesQuantity
+  }), {
+    totalSalary: 0,
+    totalCommission: 0,
+    totalBonus: 0,
+    totalBaseSalary: 0,
+    totalSalesQuantity: 0
+  });
 
   const columns = [
     {
@@ -183,8 +160,16 @@ const SalaryManagement = ({ user }) => {
       title: '底薪',
       dataIndex: 'baseSalary',
       key: 'baseSalary',
-      render: (amount) => formatCurrency(amount),
-      width: 100
+      render: (amount) => (
+        <span style={{
+          fontWeight: 'bold',
+          color: amount !== salaryService.BASE_SALARY ? '#1890ff' : undefined
+        }}>
+          {formatCurrency(amount)}
+        </span>
+      ),
+      width: 100,
+      sorter: (a, b) => a.baseSalary - b.baseSalary
     },
     {
       title: '提成',
@@ -209,9 +194,9 @@ const SalaryManagement = ({ user }) => {
       key: 'bonus',
       render: (amount, record) => (
         <div>
-          <div style={{ 
-            fontWeight: 'bold', 
-            color: getBonusColor(record.totalSalesQuantity) 
+          <div style={{
+            fontWeight: 'bold',
+            color: getBonusColor(record.totalSalesQuantity)
           }}>
             {formatCurrency(amount)}
           </div>
@@ -229,36 +214,16 @@ const SalaryManagement = ({ user }) => {
       sorter: (a, b) => a.bonus - b.bonus
     },
     {
-      title: '手动调整',
-      dataIndex: 'adjustmentAmount',
-      key: 'adjustmentAmount',
-      render: (amount) => (
-        <span style={{
-          fontWeight: 'bold',
-          color: amount > 0 ? '#13c2c2' : amount < 0 ? '#f5222d' : '#999'
-        }}>
-          {amount > 0 ? '+' : ''}{formatCurrency(amount || 0)}
-        </span>
-      ),
-      width: 110,
-      sorter: (a, b) => (a.adjustmentAmount || 0) - (b.adjustmentAmount || 0)
-    },
-    {
       title: '总工资',
       dataIndex: 'totalSalary',
       key: 'totalSalary',
-      render: (amount, record) => {
+      render: (amount) => {
         const level = getSalaryLevel(amount);
         return (
           <div>
             <div style={{ fontWeight: 'bold', color: level.color, fontSize: 16 }}>
               {formatCurrency(amount)}
             </div>
-            {record.adjustmentAmount ? (
-              <div style={{ fontSize: 12, color: '#999' }}>
-                原 {formatCurrency(record.calculatedTotalSalary ?? amount)}
-              </div>
-            ) : null}
             <Tag color={level.color} size="small">
               {level.level}
             </Tag>
@@ -285,69 +250,12 @@ const SalaryManagement = ({ user }) => {
           type="link"
           size="small"
           icon={<EditOutlined />}
-          onClick={() => handleAdjustSalary(record)}
+          onClick={() => handleAdjustBaseSalary(record)}
         >
-          调整工资
+          调整底薪
         </Button>
       )
     }] : [])
-  ];
-
-  const adjustmentColumns = [
-    {
-      title: '调整时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (date) => dayjs(date).format('YYYY-MM-DD HH:mm'),
-      width: 150
-    },
-    {
-      title: '员工姓名',
-      dataIndex: 'employee_name',
-      key: 'employee_name',
-      width: 120
-    },
-    {
-      title: '调整金额',
-      dataIndex: 'adjustment_amount',
-      key: 'adjustment_amount',
-      render: (amount) => (
-        <span style={{
-          fontWeight: 'bold',
-          color: amount > 0 ? '#13c2c2' : '#f5222d'
-        }}>
-          {amount > 0 ? '+' : ''}{formatCurrency(amount)}
-        </span>
-      ),
-      width: 120
-    },
-    {
-      title: '备注',
-      dataIndex: 'note',
-      key: 'note',
-      ellipsis: true
-    },
-    {
-      title: '操作人',
-      dataIndex: 'operator_name',
-      key: 'operator_name',
-      width: 100
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      render: (_, record) => (
-        <Popconfirm
-          title="确定删除这条工资调整记录吗？"
-          onConfirm={() => handleDeleteAdjustment(record.id)}
-        >
-          <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-            删除
-          </Button>
-        </Popconfirm>
-      )
-    }
   ];
 
   return (
@@ -382,9 +290,9 @@ const SalaryManagement = ({ user }) => {
                 <Button
                   type="primary"
                   icon={<EditOutlined />}
-                  onClick={() => handleAdjustSalary(null)}
+                  onClick={() => handleAdjustBaseSalary(null)}
                 >
-                  调整工资
+                  调整底薪
                 </Button>
               )}
             </Space>
@@ -397,14 +305,13 @@ const SalaryManagement = ({ user }) => {
           {canManageSalary && (
             <Alert
               message="管理员操作"
-              description="可使用「调整工资」增加或减少某员工当月工资（支持正负金额），调整后会反映在总工资和总支出中。"
+              description="「调整底薪」会直接修改员工的固定底薪，之后每个月的工资都会按新底薪自动计算，无需重复调整。"
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
             />
           )}
 
-          {/* 总统计 */}
           <Row gutter={16} style={{ marginBottom: 24 }}>
             <Col xs={24} sm={6}>
               <Card size="small">
@@ -464,7 +371,7 @@ const SalaryManagement = ({ user }) => {
               dataSource={salaries}
               rowKey="employeeName"
               loading={loading}
-              scroll={{ x: 1100 }}
+              scroll={{ x: 1000 }}
               pagination={{
                 showSizeChanger: true,
                 showTotal: (total) => `共 ${total} 个员工`
@@ -480,7 +387,7 @@ const SalaryManagement = ({ user }) => {
                       <strong>{totalStats.totalSalesQuantity} 件</strong>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={2}>
-                      <strong>{formatCurrency(salaries.length * salaryService.BASE_SALARY)}</strong>
+                      <strong>{formatCurrency(totalStats.totalBaseSalary)}</strong>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={3}>
                       <strong style={{ color: '#52c41a' }}>
@@ -493,22 +400,14 @@ const SalaryManagement = ({ user }) => {
                       </strong>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={5}>
-                      <strong style={{
-                        color: totalStats.totalAdjustment >= 0 ? '#13c2c2' : '#f5222d'
-                      }}>
-                        {totalStats.totalAdjustment >= 0 ? '+' : ''}
-                        {formatCurrency(totalStats.totalAdjustment)}
-                      </strong>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={6}>
                       <strong style={{ color: '#f5222d', fontSize: 16 }}>
                         {formatCurrency(totalStats.totalSalary)}
                       </strong>
                     </Table.Summary.Cell>
-                    <Table.Summary.Cell index={7}>
+                    <Table.Summary.Cell index={6}>
                       <strong>{salaries.reduce((sum, s) => sum + s.transactionCount, 0)} 笔</strong>
                     </Table.Summary.Cell>
-                    {canManageSalary && <Table.Summary.Cell index={8} />}
+                    {canManageSalary && <Table.Summary.Cell index={7} />}
                   </Table.Summary.Row>
                 </Table.Summary>
               )}
@@ -516,32 +415,14 @@ const SalaryManagement = ({ user }) => {
           </Card>
         </TabPane>
 
-        {canManageSalary && (
-        <TabPane tab="工资调整记录" key="adjustments">
-          <Card>
-            <Table
-              columns={adjustmentColumns}
-              dataSource={salaryAdjustments}
-              rowKey="id"
-              loading={loading}
-              pagination={{
-                showSizeChanger: true,
-                showTotal: (total) => `共 ${total} 条调整记录`
-              }}
-              size="small"
-            />
-          </Card>
-        </TabPane>
-        )}
-
         <TabPane tab="工资规则" key="rules">
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Card title="工资组成" size="small">
                 <Descriptions column={1} size="small">
                   <Descriptions.Item label="底薪">
-                    <strong style={{ color: '#1890ff' }}>¥3,000</strong>
-                    <span style={{ color: '#999', marginLeft: 8 }}>固定底薪</span>
+                    <strong style={{ color: '#1890ff' }}>默认 ¥3,000</strong>
+                    <span style={{ color: '#999', marginLeft: 8 }}>可按员工单独设置</span>
                   </Descriptions.Item>
                   <Descriptions.Item label="提成">
                     <strong style={{ color: '#52c41a' }}>销售数量 × ¥0.7</strong>
@@ -552,7 +433,7 @@ const SalaryManagement = ({ user }) => {
                     <span style={{ color: '#999', marginLeft: 8 }}>见右侧奖金表</span>
                   </Descriptions.Item>
                 </Descriptions>
-                
+
                 <Alert
                   message="注意"
                   description="赠送数量不计算提成和奖金，只有实际销售数量才计入工资计算。"
@@ -583,8 +464,8 @@ const SalaryManagement = ({ user }) => {
                       dataIndex: 'bonus',
                       key: 'bonus',
                       render: (bonus) => (
-                        <strong style={{ 
-                          color: bonus > 0 ? '#722ed1' : '#d9d9d9' 
+                        <strong style={{
+                          color: bonus > 0 ? '#722ed1' : '#d9d9d9'
                         }}>
                           {formatCurrency(bonus)}
                         </strong>
@@ -603,7 +484,7 @@ const SalaryManagement = ({ user }) => {
                   <h4>示例：员工张三本月销售了 5,500 件商品</h4>
                   <Descriptions column={1} size="small">
                     <Descriptions.Item label="底薪">
-                      ¥3,000
+                      ¥3,000（或管理员为该员工设置的金额）
                     </Descriptions.Item>
                     <Descriptions.Item label="提成">
                       5,500 × ¥0.7 = <strong style={{ color: '#52c41a' }}>¥3,850</strong>
@@ -612,7 +493,7 @@ const SalaryManagement = ({ user }) => {
                       销售量 5,500 件，属于 5,001-7,000 范围 = <strong style={{ color: '#722ed1' }}>¥2,000</strong>
                     </Descriptions.Item>
                     <Descriptions.Item label="总工资">
-                      ¥3,000 + ¥3,850 + ¥2,000 = <strong style={{ color: '#f5222d', fontSize: 16 }}>¥8,850</strong>
+                      底薪 + ¥3,850 + ¥2,000 = <strong style={{ color: '#f5222d', fontSize: 16 }}>¥8,850</strong>
                     </Descriptions.Item>
                   </Descriptions>
                 </div>
@@ -623,7 +504,7 @@ const SalaryManagement = ({ user }) => {
       </Tabs>
 
       <Modal
-        title={`调整工资 - ${selectedDate.format('YYYY年MM月')}`}
+        title="调整底薪"
         open={adjustModalVisible}
         onCancel={() => {
           setAdjustModalVisible(false);
@@ -641,34 +522,31 @@ const SalaryManagement = ({ user }) => {
             <Select showSearch placeholder="选择员工" optionFilterProp="children">
               {salaries.map((salary) => (
                 <Option key={salary.employeeName} value={salary.employeeName}>
-                  {salary.employeeName}
+                  {salary.employeeName}（当前底薪 {formatCurrency(salary.baseSalary)}）
                 </Option>
               ))}
             </Select>
           </Form.Item>
 
           <Form.Item
-            name="amount"
-            label="调整金额"
-            extra="正数为增加工资，负数为减少工资"
-            rules={[{ required: true, message: '请输入调整金额' }]}
+            name="baseSalary"
+            label="新底薪"
+            extra="修改后立即生效，之后每月工资均按此底薪计算"
+            rules={[{ required: true, message: '请输入底薪' }]}
           >
             <InputNumber
               style={{ width: '100%' }}
+              min={0}
               precision={2}
               formatter={(value) => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={(value) => value.replace(/¥\s?|(,*)/g, '')}
             />
           </Form.Item>
 
-          <Form.Item name="note" label="备注">
-            <Input.TextArea rows={3} placeholder="调整原因（可选）" />
-          </Form.Item>
-
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit">
-                确认调整
+                确认修改
               </Button>
               <Button onClick={() => {
                 setAdjustModalVisible(false);
