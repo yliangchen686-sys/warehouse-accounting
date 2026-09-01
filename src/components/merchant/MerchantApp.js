@@ -217,7 +217,7 @@ const MerchantApp = ({ user, onLogout }) => {
       case 'gifts':
         return <CustomerGiftManagement />;
       case 'salary':
-        return <SalaryManagement />;
+        return <SalaryManagement user={user} />;
       case 'bonusPool':
         return <BonusPool user={user} />;
       case 'employees':

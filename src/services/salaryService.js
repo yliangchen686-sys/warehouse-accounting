@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { transactionService } from './transactionService';
 import { customerService } from './customerService';
+import { authService } from './authService';
 import dayjs from 'dayjs';
 
 class SalaryService {
@@ -138,11 +139,29 @@ class SalaryService {
       );
 
       const salaries = await Promise.all(salaryPromises);
+
+      // 合并当月手动调整
+      const adjustments = await this.getSalaryAdjustments(year, month);
+      const adjustmentMap = {};
+      adjustments.forEach((item) => {
+        const name = item.employee_name ?? item.employeeName;
+        adjustmentMap[name] = (adjustmentMap[name] || 0) + (parseFloat(item.adjustment_amount ?? item.amount) || 0);
+      });
+
+      const salariesWithAdjustments = salaries.map((salary) => {
+        const adjustmentAmount = adjustmentMap[salary.employeeName] || 0;
+        return {
+          ...salary,
+          calculatedTotalSalary: salary.totalSalary,
+          adjustmentAmount,
+          totalSalary: salary.totalSalary + adjustmentAmount
+        };
+      });
       
       // 按总工资排序
-      salaries.sort((a, b) => b.totalSalary - a.totalSalary);
+      salariesWithAdjustments.sort((a, b) => b.totalSalary - a.totalSalary);
 
-      return salaries;
+      return salariesWithAdjustments;
     } catch (error) {
       console.error('获取所有员工工资失败:', error);
       throw error;
@@ -187,6 +206,116 @@ class SalaryService {
       return data[0];
     } catch (error) {
       console.error('保存工资记录失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取工资调整记录
+  async getSalaryAdjustments(year = null, month = null) {
+    try {
+      let adjustments = [];
+
+      try {
+        let query = supabase
+          .from('salary_adjustments')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (year != null) {
+          query = query.eq('year', year);
+        }
+        if (month != null) {
+          query = query.eq('month', month);
+        }
+
+        const { data, error } = await query;
+        if (!error && data) {
+          adjustments = data;
+        }
+      } catch (dbError) {
+        console.warn('从数据库获取工资调整记录失败:', dbError);
+      }
+
+      let localAdjustments = JSON.parse(localStorage.getItem('localSalaryAdjustments') || '[]');
+      if (year != null) {
+        localAdjustments = localAdjustments.filter((item) => item.year === year);
+      }
+      if (month != null) {
+        localAdjustments = localAdjustments.filter((item) => item.month === month);
+      }
+
+      const allAdjustments = [...adjustments, ...localAdjustments];
+      allAdjustments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return allAdjustments;
+    } catch (error) {
+      console.error('获取工资调整记录失败:', error);
+      return JSON.parse(localStorage.getItem('localSalaryAdjustments') || '[]');
+    }
+  }
+
+  // 手动调整工资（仅管理员）
+  async addSalaryAdjustment(adjustmentData) {
+    if (!authService.isAdmin()) {
+      throw new Error('只有管理员可以调整工资');
+    }
+
+    const amount = parseFloat(adjustmentData.amount);
+    if (Number.isNaN(amount) || amount === 0) {
+      throw new Error('调整金额不能为0');
+    }
+
+    const record = {
+      employee_name: adjustmentData.employeeName,
+      year: adjustmentData.year,
+      month: adjustmentData.month,
+      adjustment_amount: amount,
+      note: adjustmentData.note || '',
+      operator_name: adjustmentData.operatorName || '',
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from('salary_adjustments')
+        .insert([record])
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      return data[0];
+    } catch (dbError) {
+      console.warn('数据库保存工资调整失败，使用本地存储:', dbError);
+      const localAdjustments = JSON.parse(localStorage.getItem('localSalaryAdjustments') || '[]');
+      const localRecord = { ...record, id: Date.now() };
+      localAdjustments.push(localRecord);
+      localStorage.setItem('localSalaryAdjustments', JSON.stringify(localAdjustments));
+      return localRecord;
+    }
+  }
+
+  // 删除工资调整记录（仅管理员）
+  async deleteSalaryAdjustment(id) {
+    if (!authService.isAdmin()) {
+      throw new Error('只有管理员可以删除工资调整记录');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('salary_adjustments')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        const localAdjustments = JSON.parse(localStorage.getItem('localSalaryAdjustments') || '[]');
+        const filtered = localAdjustments.filter((item) => item.id !== id);
+        localStorage.setItem('localSalaryAdjustments', JSON.stringify(filtered));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('删除工资调整记录失败:', error);
       throw error;
     }
   }
