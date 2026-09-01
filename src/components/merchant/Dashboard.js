@@ -15,7 +15,7 @@ import dayjs from 'dayjs';
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-const Dashboard = () => {
+const Dashboard = ({ isMobile = false }) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [recentTransactions, setRecentTransactions] = useState([]);
@@ -122,13 +122,14 @@ const Dashboard = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}>数据概览</h2>
+      <div className="dashboard-header" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 12 : 0 }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 24 }}>数据概览</h2>
         <RangePicker
           value={dateRange}
           onChange={setDateRange}
           format="YYYY-MM-DD"
           placeholder={['开始日期', '结束日期']}
+          style={isMobile ? { width: '100%' } : undefined}
         />
       </div>
 

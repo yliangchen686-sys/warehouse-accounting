@@ -1,22 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Button, Avatar, Dropdown, message, notification } from 'antd';
+import { Avatar, Dropdown, message, notification, Tag, Tabs } from 'antd';
 import {
-  DashboardOutlined,
   ShoppingCartOutlined,
-  TeamOutlined,
   LogoutOutlined,
   UserOutlined,
-  EyeOutlined,
   BellOutlined,
   DollarOutlined,
   CalendarOutlined,
-  TrophyOutlined,
   PhoneOutlined,
-  FileAddOutlined
+  FileAddOutlined,
+  TrophyOutlined,
+  EyeOutlined
 } from '@ant-design/icons';
-import { Tabs } from 'antd';
 import { authService } from '../../services/authService';
 import { transactionService } from '../../services/transactionService';
+import ResponsiveAppShell from '../common/ResponsiveAppShell';
 import EmployeeTransactionList from './EmployeeTransactionList';
 import EmployeeSalary from './EmployeeSalary';
 import EmployeeTasks from './EmployeeTasks';
@@ -24,28 +22,51 @@ import BonusPool from '../merchant/BonusPool';
 import CustomerData from './CustomerData';
 import TransactionRequestForm from './TransactionRequestForm';
 import TransactionRequestList from './TransactionRequestList';
+import EmployeeMine from './EmployeeMine';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
-const { Header, Sider, Content } = Layout;
+const DESKTOP_MENU = [
+  { key: 'transactions', icon: <ShoppingCartOutlined />, label: '我的交易记录' },
+  { key: 'salary', icon: <DollarOutlined />, label: '本月工资' },
+  { key: 'tasks', icon: <CalendarOutlined />, label: '本月任务' },
+  { key: 'customerData', icon: <PhoneOutlined />, label: '客户数据' },
+  { key: 'transactionRequest', icon: <FileAddOutlined />, label: '申请交易' },
+  { key: 'bonusPool', icon: <TrophyOutlined />, label: '奖金池' },
+];
+
+const MOBILE_MENU = [
+  { key: 'transactions', icon: <ShoppingCartOutlined />, label: '交易', mobileLabel: '交易' },
+  { key: 'salary', icon: <DollarOutlined />, label: '工资', mobileLabel: '工资' },
+  { key: 'tasks', icon: <CalendarOutlined />, label: '任务', mobileLabel: '任务' },
+  { key: 'customerData', icon: <PhoneOutlined />, label: '客户', mobileLabel: '客户' },
+  { key: 'mine', icon: <UserOutlined />, label: '我的', mobileLabel: '我的' },
+];
+
+const PAGE_TITLES = {
+  transactions: '我的交易记录',
+  salary: '本月工资',
+  tasks: '本月任务',
+  customerData: '客户数据',
+  transactionRequest: '申请交易',
+  bonusPool: '奖金池',
+  mine: '我的',
+};
 
 const EmployeeApp = ({ user, onLogout }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const isMobile = useIsMobile();
   const [selectedKey, setSelectedKey] = useState('transactions');
-  const [realtimeSubscription, setRealtimeSubscription] = useState(null);
   const [newTransactionCount, setNewTransactionCount] = useState(0);
 
   useEffect(() => {
-    // 订阅实时交易记录更新
     const subscription = transactionService.subscribeToTransactions((payload) => {
       if (payload.eventType === 'INSERT') {
-        setNewTransactionCount(prev => prev + 1);
-        
-        // 显示新交易通知
+        setNewTransactionCount((prev) => prev + 1);
         notification.success({
           message: '新交易记录',
-          description: `有新的交易记录添加`,
+          description: '有新的交易记录添加',
           icon: <BellOutlined style={{ color: '#52c41a' }} />,
           placement: 'topRight',
-          duration: 4
+          duration: 4,
         });
       } else if (payload.eventType === 'UPDATE') {
         notification.info({
@@ -53,7 +74,7 @@ const EmployeeApp = ({ user, onLogout }) => {
           description: '有交易记录被修改',
           icon: <BellOutlined style={{ color: '#1890ff' }} />,
           placement: 'topRight',
-          duration: 3
+          duration: 3,
         });
       } else if (payload.eventType === 'DELETE') {
         notification.warning({
@@ -61,12 +82,10 @@ const EmployeeApp = ({ user, onLogout }) => {
           description: '有交易记录被删除',
           icon: <BellOutlined style={{ color: '#faad14' }} />,
           placement: 'topRight',
-          duration: 3
+          duration: 3,
         });
       }
     });
-
-    setRealtimeSubscription(subscription);
 
     return () => {
       if (subscription) {
@@ -83,35 +102,37 @@ const EmployeeApp = ({ user, onLogout }) => {
 
   const handleMenuClick = (key) => {
     setSelectedKey(key);
-    
-    // 如果点击交易记录，清除新交易提示
     if (key === 'transactions') {
       setNewTransactionCount(0);
     }
   };
 
-  const userMenu = (
-    <Menu>
-      <Menu.Item key="profile" icon={<UserOutlined />}>
-        个人资料
-      </Menu.Item>
-      <Menu.Divider />
-      <Menu.Item key="logout" icon={<LogoutOutlined />} onClick={handleLogout}>
-        退出登录
-      </Menu.Item>
-    </Menu>
-  );
+  const userMenu = {
+    items: [
+      { key: 'profile', icon: <UserOutlined />, label: '个人资料', disabled: true },
+      { type: 'divider' },
+      { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout },
+    ],
+  };
 
   const renderContent = () => {
     switch (selectedKey) {
       case 'transactions':
-        return <EmployeeTransactionList user={user} />;
+        return <EmployeeTransactionList user={user} isMobile={isMobile} />;
       case 'salary':
         return <EmployeeSalary user={user} />;
       case 'tasks':
         return <EmployeeTasks user={user} />;
       case 'customerData':
         return <CustomerData user={user} />;
+      case 'mine':
+        return (
+          <EmployeeMine
+            user={user}
+            onNavigate={handleMenuClick}
+            onLogout={handleLogout}
+          />
+        );
       case 'transactionRequest':
         return (
           <Tabs
@@ -120,129 +141,56 @@ const EmployeeApp = ({ user, onLogout }) => {
               {
                 key: 'form',
                 label: '提交申请',
-                children: <TransactionRequestForm user={user} onSuccess={() => {}} />
+                children: <TransactionRequestForm user={user} onSuccess={() => {}} />,
               },
               {
                 key: 'list',
                 label: '我的申请',
-                children: <TransactionRequestList user={user} />
-              }
+                children: <TransactionRequestList user={user} />,
+              },
             ]}
           />
         );
       case 'bonusPool':
         return <BonusPool user={user} />;
       default:
-        return <EmployeeTransactionList user={user} />;
+        return <EmployeeTransactionList user={user} isMobile={isMobile} />;
     }
   };
 
+  const mobileSubtitle =
+    selectedKey === 'transactions'
+      ? '我的交易 · 实时同步中'
+      : PAGE_TITLES[selectedKey] || '员工端';
+
+  const headerBadge = !isMobile ? (
+    <Tag color="success" icon={<EyeOutlined />} className="app-shell-readonly-badge">
+      只读模式
+    </Tag>
+  ) : selectedKey === 'transactions' ? (
+    <Tag color="blue" className="app-shell-readonly-badge">只读</Tag>
+  ) : null;
+
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        theme="dark"
-        width={240}
-      >
-        <div style={{
-          height: 32,
-          margin: 16,
-          background: 'rgba(255, 255, 255, 0.3)',
-          borderRadius: 6,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'white',
-          fontWeight: 'bold'
-        }}>
-          {!collapsed ? '仓储记账系统' : '记账'}
-        </div>
-        
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          onClick={({ key }) => handleMenuClick(key)}
-        >
-          <Menu.Item key="transactions" icon={<ShoppingCartOutlined />}>
-            我的交易记录
-          </Menu.Item>
-          <Menu.Item key="salary" icon={<DollarOutlined />}>
-            本月工资
-          </Menu.Item>
-          <Menu.Item key="tasks" icon={<CalendarOutlined />}>
-            本月任务
-          </Menu.Item>
-          <Menu.Item key="customerData" icon={<PhoneOutlined />}>
-            客户数据
-          </Menu.Item>
-          <Menu.Item key="transactionRequest" icon={<FileAddOutlined />}>
-            申请交易
-          </Menu.Item>
-          <Menu.Item key="bonusPool" icon={<TrophyOutlined />}>
-            奖金池
-          </Menu.Item>
-        </Menu>
-      </Sider>
-
-      <Layout>
-        <Header style={{
-          padding: '0 24px',
-          background: '#fff',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          boxShadow: '0 1px 4px rgba(0,21,41,.08)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <h2 style={{ margin: 0, color: '#1f1f1f' }}>
-              员工端 - 查看中心
-            </h2>
-            <EyeOutlined style={{ fontSize: 16, color: '#666' }} />
+    <ResponsiveAppShell
+      headerTitle={isMobile ? user.name : '员工端 - 查看中心'}
+      headerSubtitle={isMobile ? mobileSubtitle : undefined}
+      headerBadge={headerBadge}
+      headerExtra={
+        <Dropdown menu={userMenu} placement="bottomRight">
+          <div className="app-shell-user">
+            <Avatar icon={<UserOutlined />} size={isMobile ? 'small' : 'default'} />
+            {!isMobile && <span className="app-shell-user-name">{user.name}</span>}
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{
-              padding: '4px 12px',
-              background: '#f6ffed',
-              border: '1px solid #b7eb8f',
-              borderRadius: 4,
-              fontSize: 12,
-              color: '#389e0d'
-            }}>
-              只读模式
-            </div>
-
-            <Dropdown overlay={userMenu} placement="bottomRight">
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                cursor: 'pointer',
-                padding: '8px 12px',
-                borderRadius: 6,
-                transition: 'background-color 0.3s'
-              }}>
-                <Avatar icon={<UserOutlined />} />
-                <span style={{ fontWeight: 500 }}>{user.name}</span>
-              </div>
-            </Dropdown>
-          </div>
-        </Header>
-
-        <Content style={{
-          margin: '24px',
-          padding: '24px',
-          background: '#fff',
-          borderRadius: 8,
-          minHeight: 'calc(100vh - 112px)'
-        }}>
-          {renderContent()}
-        </Content>
-      </Layout>
-    </Layout>
+        </Dropdown>
+      }
+      menuItems={DESKTOP_MENU}
+      mobileMenuItems={MOBILE_MENU}
+      selectedKey={selectedKey}
+      onMenuClick={handleMenuClick}
+    >
+      {renderContent()}
+    </ResponsiveAppShell>
   );
 };
 

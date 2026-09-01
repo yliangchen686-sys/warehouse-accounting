@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Table,
   Input,
@@ -9,18 +9,18 @@ import {
   Row,
   Col,
   Statistic,
-  Alert,
   Button,
-  Space
+  Space,
+  List,
+  Pagination
 } from 'antd';
 import {
   SearchOutlined,
   ReloadOutlined,
   FilterOutlined,
-  EyeOutlined,
-  InfoCircleOutlined,
   ShoppingOutlined,
-  DollarOutlined
+  DollarOutlined,
+  UpOutlined
 } from '@ant-design/icons';
 import { transactionService } from '../../services/transactionService';
 import { employeePaymentService } from '../../services/employeePaymentService';
@@ -31,23 +31,34 @@ import dayjs from 'dayjs';
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-const EmployeeTransactionList = ({ user }) => {
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(amount || 0);
+
+const formatRelativeTime = (dateStr) => {
+  const d = dayjs(dateStr);
+  const today = dayjs().startOf('day');
+  const yesterday = today.subtract(1, 'day');
+  const time = d.format('HH:mm');
+  if (d.isAfter(today)) return `今天 ${time}`;
+  if (d.isAfter(yesterday)) return `昨天 ${time}`;
+  return d.format('MM-DD HH:mm');
+};
+
+const getTypeColor = (type) => {
+  const colors = { purchase: 'blue', sale: 'green', return: 'orange', gift: 'red' };
+  return colors[type] || 'default';
+};
+
+const EmployeeTransactionList = ({ user, isMobile = false }) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({
-    customerName: '',
-    type: '',
-    dateRange: null
-  });
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 10,
-    total: 0
-  });
+  const [filters, setFilters] = useState({ customerName: '', type: '', dateRange: null });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
   const [stats, setStats] = useState(null);
   const [paymentStats, setPaymentStats] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [customerBindings, setCustomerBindings] = useState({});
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   useEffect(() => {
     loadTransactions();
@@ -55,7 +66,6 @@ const EmployeeTransactionList = ({ user }) => {
     loadPaymentStats();
     loadCustomerBindings();
 
-    // 设置自动刷新
     let interval;
     if (autoRefresh) {
       interval = setInterval(() => {
@@ -63,14 +73,9 @@ const EmployeeTransactionList = ({ user }) => {
         loadStats();
         loadPaymentStats();
         loadCustomerBindings();
-      }, 30000); // 每30秒刷新一次
+      }, 30000);
     }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+    return () => interval && clearInterval(interval);
   }, [filters, pagination.current, pagination.pageSize, autoRefresh]);
 
   const loadTransactions = async () => {
@@ -80,22 +85,16 @@ const EmployeeTransactionList = ({ user }) => {
         customerName: filters.customerName,
         type: filters.type,
         startDate: filters.dateRange?.[0]?.toISOString(),
-        endDate: filters.dateRange?.[1]?.toISOString()
+        endDate: filters.dateRange?.[1]?.toISOString(),
       };
-
       const allData = await transactionService.getTransactions(filterParams);
-      
-      // 获取该员工绑定的客户列表
       const employeeCustomers = await customerService.getEmployeeCustomers(user.name);
-      const customerNames = employeeCustomers.map(c => c.customer_name);
-      
-      // 显示该员工名下所有客户的交易记录
-      const employeeTransactions = allData.filter(transaction => 
-        customerNames.includes(transaction.customer_name)
+      const customerNames = employeeCustomers.map((c) => c.customer_name);
+      const employeeTransactions = allData.filter((t) =>
+        customerNames.includes(t.customer_name)
       );
-      
       setTransactions(employeeTransactions);
-      setPagination(prev => ({ ...prev, total: employeeTransactions.length }));
+      setPagination((prev) => ({ ...prev, total: employeeTransactions.length }));
     } catch (error) {
       console.error('加载交易记录失败:', error);
     } finally {
@@ -105,30 +104,22 @@ const EmployeeTransactionList = ({ user }) => {
 
   const loadStats = async () => {
     try {
-      // 计算该员工本月的销售数量
       const currentMonth = dayjs();
-      const startOfMonth = currentMonth.startOf('month').toISOString();
-      const endOfMonth = currentMonth.endOf('month').toISOString();
-      
       const allData = await transactionService.getTransactions({
-        startDate: startOfMonth,
-        endDate: endOfMonth
+        startDate: currentMonth.startOf('month').toISOString(),
+        endDate: currentMonth.endOf('month').toISOString(),
       });
-      
-      // 获取该员工绑定的客户列表
       const employeeCustomers = await customerService.getEmployeeCustomers(user.name);
-      const customerNames = employeeCustomers.map(c => c.customer_name);
-      
-      // 统计该员工名下所有客户的本月销售数量
-      const employeeSales = allData.filter(transaction => 
-        customerNames.includes(transaction.customer_name) && transaction.type === 'sale'
+      const customerNames = employeeCustomers.map((c) => c.customer_name);
+      const employeeSales = allData.filter(
+        (t) => customerNames.includes(t.customer_name) && t.type === 'sale'
       );
-      
-      const monthlyStats = {
-        monthlySalesQuantity: employeeSales.reduce((sum, t) => sum + (parseFloat(t.quantity) || 0), 0)
-      };
-      
-      setStats(monthlyStats);
+      setStats({
+        monthlySalesQuantity: employeeSales.reduce(
+          (sum, t) => sum + (parseFloat(t.quantity) || 0),
+          0
+        ),
+      });
     } catch (error) {
       console.error('加载统计数据失败:', error);
     }
@@ -136,7 +127,6 @@ const EmployeeTransactionList = ({ user }) => {
 
   const loadPaymentStats = async () => {
     try {
-      // 获取该员工的收款统计
       const paymentData = await employeePaymentService.getEmployeePaymentStats(user.name);
       setPaymentStats(paymentData);
     } catch (error) {
@@ -148,8 +138,8 @@ const EmployeeTransactionList = ({ user }) => {
     try {
       const bindings = await customerService.getAllCustomerBindings();
       const bindingMap = {};
-      bindings.forEach(binding => {
-        bindingMap[binding.customer_name] = binding.employee_name;
+      bindings.forEach((b) => {
+        bindingMap[b.customer_name] = b.employee_name;
       });
       setCustomerBindings(bindingMap);
     } catch (error) {
@@ -158,34 +148,21 @@ const EmployeeTransactionList = ({ user }) => {
   };
 
   const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setPagination(prev => ({ ...prev, current: 1 }));
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setPagination((prev) => ({ ...prev, current: 1 }));
   };
 
   const clearFilters = () => {
-    setFilters({
-      customerName: '',
-      type: '',
-      dateRange: null
-    });
+    setFilters({ customerName: '', type: '', dateRange: null });
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('zh-CN', {
-      style: 'currency',
-      currency: 'CNY'
-    }).format(amount);
-  };
+  const paginatedTransactions = useMemo(() => {
+    const start = (pagination.current - 1) * pagination.pageSize;
+    return transactions.slice(start, start + pagination.pageSize);
+  }, [transactions, pagination.current, pagination.pageSize]);
 
-  const getTypeColor = (type) => {
-    const colors = {
-      purchase: 'blue',
-      sale: 'green',
-      return: 'orange',
-      gift: 'red'
-    };
-    return colors[type] || 'default';
-  };
+  const balance = paymentStats?.currentBalance || 0;
+  const balanceColor = balance >= 0 ? '#1677ff' : '#f5222d';
 
   const columns = [
     {
@@ -194,263 +171,297 @@ const EmployeeTransactionList = ({ user }) => {
       key: 'created_at',
       render: (text) => dayjs(text).format('YYYY-MM-DD HH:mm:ss'),
       width: 150,
-      sorter: (a, b) => dayjs(a.created_at).unix() - dayjs(b.created_at).unix()
+      sorter: (a, b) => dayjs(a.created_at).unix() - dayjs(b.created_at).unix(),
     },
     {
       title: '类型',
       dataIndex: 'type',
       key: 'type',
-      render: (type) => (
-        <Tag color={getTypeColor(type)}>
-          {transactionTypes[type]}
-        </Tag>
-      ),
+      render: (type) => <Tag color={getTypeColor(type)}>{transactionTypes[type]}</Tag>,
       width: 80,
-      filters: Object.entries(transactionTypes).map(([key, value]) => ({
-        text: value,
-        value: key
-      })),
-      onFilter: (value, record) => record.type === value
     },
     {
       title: '客户',
       dataIndex: 'customer_name',
       key: 'customer_name',
       ellipsis: true,
-      width: 150
+      width: 150,
     },
     {
       title: '收款员工',
       dataIndex: 'collector',
       key: 'collector',
       ellipsis: true,
-      width: 100
+      width: 100,
     },
     {
       title: '绑定员工',
       dataIndex: 'customer_name',
       key: 'bound_employee',
       render: (customerName) => {
-        const boundEmployee = customerBindings[customerName];
-        return boundEmployee ? (
-          <Tag color="blue">{boundEmployee}</Tag>
-        ) : (
-          <Tag color="default">未绑定</Tag>
-        );
+        const bound = customerBindings[customerName];
+        return bound ? <Tag color="blue">{bound}</Tag> : <Tag>未绑定</Tag>;
       },
-      ellipsis: true,
-      width: 100
+      width: 100,
     },
     {
       title: '数量',
       dataIndex: 'quantity',
       key: 'quantity',
-      render: (quantity) => Math.floor(quantity),
+      render: (q) => Math.floor(q),
       width: 80,
-      align: 'right'
+      align: 'right',
     },
     {
-      title: '赠送数量',
+      title: '赠送',
       dataIndex: 'gift_quantity',
       key: 'gift_quantity',
-      render: (quantity) => quantity > 0 ? Math.floor(quantity) : '-',
+      render: (q) => (q > 0 ? Math.floor(q) : '-'),
       width: 80,
-      align: 'right'
+      align: 'right',
     },
     {
       title: '单价',
       dataIndex: 'unit_price',
       key: 'unit_price',
-      render: (price) => formatCurrency(price),
+      render: (p) => formatCurrency(p),
       width: 100,
-      align: 'right'
+      align: 'right',
     },
     {
       title: '总金额',
       dataIndex: 'total_amount',
       key: 'total_amount',
       render: (amount) => (
-        <span style={{ fontWeight: 'bold', color: '#52c41a' }}>
+        <span style={{ fontWeight: 'bold', color: amount >= 0 ? '#52c41a' : '#f5222d' }}>
           {formatCurrency(amount)}
         </span>
       ),
       width: 120,
       align: 'right',
-      sorter: (a, b) => a.total_amount - b.total_amount
-    }
+      sorter: (a, b) => a.total_amount - b.total_amount,
+    },
   ];
 
-  return (
-    <div>
-      <Alert
-        message="实时同步"
-        description={
-          <div>
-            交易记录会自动实时更新，无需手动刷新。
-            {autoRefresh && <span style={{ color: '#52c41a' }}> ● 自动刷新已启用（每30秒）</span>}
-          </div>
-        }
-        type="success"
-        icon={<InfoCircleOutlined />}
-        showIcon
-        closable
-        style={{ marginBottom: 16 }}
-      />
+  const renderBalanceHero = () => (
+    <div className="txn-balance-hero">
+      <div className="txn-balance-label">收款余额</div>
+      <div className="txn-balance-amount" style={{ color: balanceColor }}>
+        {formatCurrency(balance)}
+      </div>
+      <div className="txn-balance-tags">
+        {stats && (
+          <Tag className="txn-balance-tag">
+            本月销售 {Math.floor(stats.monthlySalesQuantity)} 件
+          </Tag>
+        )}
+        {paymentStats && (
+          <Tag className="txn-balance-tag">
+            已转账 {formatCurrency(paymentStats.totalTransferred || 0)}
+          </Tag>
+        )}
+        {autoRefresh && (
+          <Tag color="success" className="txn-balance-tag txn-balance-tag--sync">
+            实时同步
+          </Tag>
+        )}
+      </div>
+    </div>
+  );
 
-      {/* 员工个人统计卡片 */}
-      {stats && (
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={24}>
-            <Card size="small">
-              <Row gutter={16}>
-                <Col xs={24} sm={6}>
-                  <Statistic
-                    title="我的本月销售数量"
-                    value={Math.floor(stats.monthlySalesQuantity)}
-                    valueStyle={{ color: '#1890ff' }}
-                    prefix={<ShoppingOutlined />}
-                    suffix="件"
-                  />
-                </Col>
-                <Col xs={24} sm={6}>
-                  <Statistic
-                    title="我的交易记录"
-                    value={transactions.length}
-                    valueStyle={{ color: '#52c41a' }}
-                    prefix={<EyeOutlined />}
-                    suffix="笔"
-                  />
-                </Col>
-                <Col xs={24} sm={6}>
-                  <Statistic
-                    title="我的收款余额"
-                    value={paymentStats?.currentBalance || 0}
-                    formatter={(value) => new Intl.NumberFormat('zh-CN', {
-                      style: 'currency',
-                      currency: 'CNY'
-                    }).format(value)}
-                    valueStyle={{ 
-                      color: (paymentStats?.currentBalance || 0) >= 0 ? '#52c41a' : '#f5222d',
-                      fontWeight: 'bold'
-                    }}
-                    prefix={<DollarOutlined />}
-                  />
-                </Col>
-                <Col xs={24} sm={6}>
-                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                    <div style={{ fontSize: 14, color: '#666', marginBottom: 4 }}>
-                      当前员工
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 'bold', color: '#722ed1' }}>
-                      {user.name}
-                    </div>
-                    {paymentStats && (
-                      <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                        已转账: {new Intl.NumberFormat('zh-CN', {
-                          style: 'currency',
-                          currency: 'CNY'
-                        }).format(paymentStats.totalTransferred || 0)}
-                      </div>
-                    )}
-                  </div>
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-        </Row>
-      )}
+  const renderDesktopStats = () =>
+    stats && (
+      <Row gutter={16} className="txn-desktop-stats">
+        <Col xs={24} sm={6}>
+          <Statistic
+            title="我的本月销售数量"
+            value={Math.floor(stats.monthlySalesQuantity)}
+            valueStyle={{ color: '#1890ff' }}
+            prefix={<ShoppingOutlined />}
+            suffix="件"
+          />
+        </Col>
+        <Col xs={24} sm={6}>
+          <Statistic title="我的交易记录" value={transactions.length} suffix="笔" />
+        </Col>
+        <Col xs={24} sm={6}>
+          <Statistic
+            title="我的收款余额"
+            value={balance}
+            formatter={(v) => formatCurrency(v)}
+            valueStyle={{ color: balanceColor, fontWeight: 'bold' }}
+            prefix={<DollarOutlined />}
+          />
+        </Col>
+        <Col xs={24} sm={6}>
+          <Statistic
+            title="已转账"
+            value={paymentStats?.totalTransferred || 0}
+            formatter={(v) => formatCurrency(v)}
+          />
+        </Col>
+      </Row>
+    );
 
-      {/* 筛选器 */}
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={16} align="middle">
-          <Col xs={24} sm={8} md={6}>
-            <Input
-              placeholder="搜索客户名称"
-              prefix={<SearchOutlined />}
-              value={filters.customerName}
-              onChange={(e) => handleFilterChange('customerName', e.target.value)}
-              allowClear
-            />
-          </Col>
-          <Col xs={24} sm={8} md={6}>
-            <Select
-              placeholder="选择交易类型"
-              value={filters.type}
-              onChange={(value) => handleFilterChange('type', value)}
-              allowClear
-              style={{ width: '100%' }}
-            >
-              {Object.entries(transactionTypes).map(([key, value]) => (
-                <Option key={key} value={key}>{value}</Option>
-              ))}
-            </Select>
-          </Col>
-          <Col xs={24} sm={8} md={8}>
-            <RangePicker
-              value={filters.dateRange}
-              onChange={(dates) => handleFilterChange('dateRange', dates)}
-              format="YYYY-MM-DD"
-              style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={24} sm={24} md={4}>
+  const renderFilters = () => (
+    <div className="txn-filters">
+      <div className="txn-filters-row">
+        <Input
+          placeholder="搜索客户"
+          prefix={<SearchOutlined />}
+          value={filters.customerName}
+          onChange={(e) => handleFilterChange('customerName', e.target.value)}
+          allowClear
+          className="txn-filters-search"
+        />
+        {isMobile ? (
+          <Button
+            icon={filtersExpanded ? <UpOutlined /> : <FilterOutlined />}
+            onClick={() => setFiltersExpanded(!filtersExpanded)}
+          >
+            筛选
+          </Button>
+        ) : (
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={loadTransactions} loading={loading}>
+              刷新
+            </Button>
+            <Button icon={<FilterOutlined />} onClick={clearFilters}>
+              清空
+            </Button>
+          </Space>
+        )}
+      </div>
+
+      {(filtersExpanded || !isMobile) && (
+        <div className="txn-filters-expanded">
+          <Select
+            placeholder="交易类型"
+            value={filters.type || undefined}
+            onChange={(v) => handleFilterChange('type', v)}
+            allowClear
+            style={{ width: isMobile ? '100%' : 160 }}
+          >
+            {Object.entries(transactionTypes).map(([key, value]) => (
+              <Option key={key} value={key}>{value}</Option>
+            ))}
+          </Select>
+          <RangePicker
+            value={filters.dateRange}
+            onChange={(dates) => handleFilterChange('dateRange', dates)}
+            format="YYYY-MM-DD"
+            style={{ width: isMobile ? '100%' : undefined }}
+          />
+          {isMobile && (
             <Space>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={loadTransactions}
-                loading={loading}
-                title="手动刷新"
-              >
+              <Button icon={<ReloadOutlined />} onClick={loadTransactions} loading={loading} block>
                 刷新
               </Button>
-              <Button
-                icon={<FilterOutlined />}
-                onClick={clearFilters}
-                title="清空筛选条件"
-              >
+              <Button icon={<FilterOutlined />} onClick={clearFilters} block>
                 清空
               </Button>
             </Space>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* 交易记录表格 */}
-      <Card>
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0 }}>交易记录列表</h3>
-          <Button
-            size="small"
-            type={autoRefresh ? 'primary' : 'default'}
-            onClick={() => setAutoRefresh(!autoRefresh)}
-          >
-            {autoRefresh ? '关闭自动刷新' : '开启自动刷新'}
-          </Button>
+          )}
         </div>
-        
+      )}
+    </div>
+  );
+
+  const renderMobileCards = () => (
+    <List
+      className="txn-mobile-list"
+      loading={loading}
+      dataSource={paginatedTransactions}
+      renderItem={(item) => {
+        const isNegative = item.total_amount < 0;
+        const giftText =
+          item.gift_quantity > 0 ? ` · 赠送 ${Math.floor(item.gift_quantity)}` : '';
+        return (
+          <Card className="txn-mobile-card" size="small">
+            <div className="txn-mobile-card-header">
+              <span className="txn-mobile-card-title">
+                {item.customer_name} · {transactionTypes[item.type]}
+              </span>
+              <span
+                className="txn-mobile-card-amount"
+                style={{ color: isNegative ? '#f5222d' : '#1677ff' }}
+              >
+                {formatCurrency(item.total_amount)}
+              </span>
+            </div>
+            <div className="txn-mobile-card-meta">
+              {formatRelativeTime(item.created_at)}
+              {item.quantity ? ` · 数量 ${Math.floor(item.quantity)}${giftText}` : ''}
+            </div>
+          </Card>
+        );
+      }}
+    />
+  );
+
+  const paginationNode = (
+    <Pagination
+      className="txn-pagination"
+      current={pagination.current}
+      pageSize={pagination.pageSize}
+      total={pagination.total}
+      showSizeChanger={!isMobile}
+      showTotal={isMobile ? undefined : (total, range) =>
+        `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+      }
+      onChange={(page, pageSize) =>
+        setPagination((prev) => ({ ...prev, current: page, pageSize }))
+      }
+      size={isMobile ? 'small' : 'default'}
+      simple={isMobile}
+    />
+  );
+
+  return (
+    <div className="employee-transaction-list">
+      {isMobile ? renderBalanceHero() : renderDesktopStats()}
+
+      {renderFilters()}
+
+      <div className="txn-list-header">
+        <span className="txn-list-title">
+          交易记录 {transactions.length > 0 && `(${transactions.length})`}
+        </span>
+        <Button
+          size="small"
+          type={autoRefresh ? 'primary' : 'default'}
+          onClick={() => setAutoRefresh(!autoRefresh)}
+        >
+          {autoRefresh ? '自动刷新' : '手动刷新'}
+        </Button>
+      </div>
+
+      {isMobile ? (
+        <>
+          {renderMobileCards()}
+          {pagination.total > pagination.pageSize && paginationNode}
+        </>
+      ) : (
         <Table
           columns={columns}
           dataSource={transactions}
           rowKey="id"
           loading={loading}
           pagination={{
-            ...pagination,
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) =>
-              `第 ${range[0]}-${range[1]} 条，共 ${total} 条记录`,
-            onChange: (page, pageSize) => {
-              setPagination(prev => ({
-                ...prev,
-                current: page,
-                pageSize: pageSize
-              }));
-            }
+              `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+            onChange: (page, pageSize) =>
+              setPagination((prev) => ({ ...prev, current: page, pageSize })),
           }}
           scroll={{ x: 1200 }}
           size="small"
         />
-      </Card>
+      )}
     </div>
   );
 };

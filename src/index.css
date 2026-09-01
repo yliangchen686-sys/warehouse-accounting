@@ -16,7 +16,6 @@ code {
   box-sizing: border-box;
 }
 
-/* 自定义滚动条样式 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -36,7 +35,326 @@ code {
   background: #a8a8a8;
 }
 
-/* Ant Design 表格样式优化 */
+/* ── App Shell ── */
+.app-shell-main--mobile {
+  padding-bottom: 56px;
+}
+
+.app-shell-header {
+  position: relative;
+  padding: 0 16px !important;
+  background: #fff !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  height: auto !important;
+  min-height: 56px;
+  line-height: 1.4 !important;
+}
+
+.app-shell-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.app-shell-desktop-title {
+  margin: 0;
+  color: #1f1f1f;
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+.app-shell-mobile-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.app-shell-mobile-subtitle {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.app-shell-header-extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.app-shell-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.app-shell-user-name {
+  font-weight: 500;
+}
+
+.app-shell-content {
+  margin: 16px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  min-height: calc(100vh - 112px);
+}
+
+.app-shell-brand {
+  height: 32px;
+  margin: 16px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.app-shell-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  z-index: 1000;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.app-shell-bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #888;
+  font-size: 10px;
+  padding: 4px 0;
+  transition: color 0.2s;
+}
+
+.app-shell-bottom-nav-item--active {
+  color: #1677ff;
+}
+
+.app-shell-bottom-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.app-shell-bottom-nav-label {
+  font-size: 10px;
+}
+
+.app-shell-more-item {
+  cursor: pointer;
+  padding: 12px 0 !important;
+}
+
+.app-shell-more-item--active {
+  color: #1677ff;
+  font-weight: 600;
+}
+
+.app-shell-more-icon {
+  margin-right: 12px;
+  font-size: 18px;
+}
+
+.merchant-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Employee Transaction List ── */
+.txn-balance-hero {
+  background: linear-gradient(135deg, #e6f4ff 0%, #f0f5ff 100%);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.txn-balance-label {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.txn-balance-amount {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 10px;
+}
+
+.txn-balance-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.txn-balance-tag {
+  margin: 0 !important;
+  font-size: 12px;
+}
+
+.txn-desktop-stats {
+  margin-bottom: 16px;
+}
+
+.txn-filters {
+  margin-bottom: 16px;
+}
+
+.txn-filters-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.txn-filters-search {
+  flex: 1;
+}
+
+.txn-filters-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.txn-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.txn-list-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.txn-mobile-list {
+  margin-bottom: 12px;
+}
+
+.txn-mobile-card {
+  margin-bottom: 8px !important;
+  border-radius: 8px !important;
+}
+
+.txn-mobile-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.txn-mobile-card-title {
+  font-weight: 500;
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.txn-mobile-card-amount {
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.txn-mobile-card-meta {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.txn-pagination {
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ── Employee Mine ── */
+.employee-mine-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  background: #fafafa !important;
+}
+
+.employee-mine-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #1677ff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.employee-mine-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.employee-mine-list-item {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.employee-mine-list-item:active {
+  background: #f5f5f5;
+}
+
+.employee-mine-list-icon {
+  font-size: 20px;
+  color: #1677ff;
+}
+
+.employee-mine-logout .employee-mine-list-icon {
+  color: #f5222d;
+}
+
+/* ── Merchant mobile cards ── */
+.merchant-txn-mobile-card {
+  margin-bottom: 8px !important;
+}
+
+.merchant-txn-mobile-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ── Ant Design overrides ── */
 .ant-table-tbody > tr:hover > td {
   background-color: #f5f5f5 !important;
 }
@@ -45,48 +363,15 @@ code {
   background-color: #e6f7ff !important;
 }
 
-/* 响应式布局优化 */
-@media (max-width: 768px) {
-  .ant-layout-sider {
-    position: fixed !important;
-    height: 100vh;
-    left: 0;
-    top: 0;
-    z-index: 999;
-  }
-  
-  .ant-layout-sider.ant-layout-sider-collapsed {
-    left: -200px;
-  }
-  
-  .ant-layout {
-    margin-left: 0 !important;
-  }
-}
-
-/* 卡片阴影效果 */
 .ant-card {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   border-radius: 8px;
 }
 
-.ant-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.3s ease;
-}
-
-/* 按钮样式优化 */
 .ant-btn-primary {
   border-radius: 6px;
 }
 
-.ant-btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
-  transition: all 0.3s ease;
-}
-
-/* 表格样式优化 */
 .ant-table {
   border-radius: 8px;
   overflow: hidden;
@@ -97,49 +382,77 @@ code {
   font-weight: 600;
 }
 
-/* 统计卡片样式 */
 .ant-statistic-content {
   font-weight: 600;
 }
 
-/* 标签样式优化 */
 .ant-tag {
   border-radius: 4px;
   font-weight: 500;
 }
 
-/* 输入框样式优化 */
 .ant-input,
 .ant-input-number,
 .ant-select-selector {
   border-radius: 6px;
 }
 
-.ant-input:focus,
-.ant-input-focused,
-.ant-input-number:focus,
-.ant-input-number-focused,
-.ant-select-focused .ant-select-selector {
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
-}
-
-/* 模态框样式优化 */
 .ant-modal {
   border-radius: 8px;
   overflow: hidden;
 }
 
-.ant-modal-header {
-  border-radius: 8px 8px 0 0;
-}
-
-/* 消息通知样式优化 */
-.ant-message {
-  z-index: 9999;
-}
-
+.ant-message,
 .ant-notification {
   z-index: 9999;
 }
 
+/* ── Responsive ── */
+@media (max-width: 767px) {
+  .app-shell-content {
+    margin: 0;
+    padding: 12px;
+    border-radius: 0;
+    min-height: calc(100vh - 56px - 56px);
+  }
 
+  .app-shell-header {
+    padding: 8px 12px !important;
+  }
+
+  .app-shell-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .app-shell-readonly-badge {
+    position: absolute;
+    right: 52px;
+    top: 12px;
+  }
+
+  .merchant-header-actions .ant-btn {
+    padding: 4px 8px;
+  }
+
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .ant-card-body {
+    padding: 12px !important;
+  }
+
+  .ant-modal {
+    max-width: calc(100vw - 32px) !important;
+    margin: 16px auto !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .app-shell-content {
+    margin: 24px;
+    padding: 24px;
+  }
+}

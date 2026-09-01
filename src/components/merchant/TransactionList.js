@@ -13,14 +13,17 @@ import {
   Tag,
   Row,
   Col,
-  Statistic
+  Statistic,
+  List,
+  Pagination
 } from 'antd';
 import {
   SearchOutlined,
   EditOutlined,
   DeleteOutlined,
   ReloadOutlined,
-  FilterOutlined
+  FilterOutlined,
+  UpOutlined
 } from '@ant-design/icons';
 import { transactionService } from '../../services/transactionService';
 import { customerService } from '../../services/customerService';
@@ -31,7 +34,7 @@ import dayjs from 'dayjs';
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-const TransactionList = () => {
+const TransactionList = ({ isMobile = false }) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
@@ -57,6 +60,7 @@ const TransactionList = () => {
     totalPurchase: 0,
     totalReturn: 0
   });
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   useEffect(() => {
     loadTransactions();
@@ -366,52 +370,68 @@ const TransactionList = () => {
     );
   }
 
+  const paginatedTransactions = transactions.slice(
+    (pagination.current - 1) * pagination.pageSize,
+    pagination.current * pagination.pageSize
+  );
+
+  const formatRelativeTime = (dateStr) => {
+    const d = dayjs(dateStr);
+    const today = dayjs().startOf('day');
+    const yesterday = today.subtract(1, 'day');
+    const time = d.format('HH:mm');
+    if (d.isAfter(today)) return `今天 ${time}`;
+    if (d.isAfter(yesterday)) return `昨天 ${time}`;
+    return d.format('MM-DD HH:mm');
+  };
+
   return (
-    <div>
-      {/* 统计卡片 */}
+    <div className="merchant-transaction-list">
       {stats && (
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col xs={24} sm={6}>
+        <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+          <Col xs={12} sm={6}>
             <Card size="small">
               <Statistic
                 title="库存"
                 value={stats.currentStock}
-                valueStyle={{ 
-                  color: stats.currentStock < 0 ? '#f5222d' : 
-                         stats.currentStock < 10 ? '#faad14' : '#52c41a'
+                valueStyle={{
+                  color: stats.currentStock < 0 ? '#f5222d' :
+                    stats.currentStock < 10 ? '#faad14' : '#52c41a',
+                  fontSize: isMobile ? 20 : undefined
                 }}
                 suffix="件"
               />
             </Card>
           </Col>
-          <Col xs={24} sm={6}>
+          <Col xs={12} sm={6}>
             <Card size="small">
               <Statistic
                 title="净收入"
                 value={stats.totalAmount}
                 formatter={(value) => formatCurrency(value)}
-                valueStyle={{ 
-                  color: stats.totalAmount >= 0 ? '#52c41a' : '#f5222d' 
+                valueStyle={{
+                  color: stats.totalAmount >= 0 ? '#52c41a' : '#f5222d',
+                  fontSize: isMobile ? 20 : undefined
                 }}
               />
             </Card>
           </Col>
-          <Col xs={24} sm={6}>
+          <Col xs={12} sm={6}>
             <Card size="small">
               <Statistic
                 title="销售数量"
                 value={Math.floor(stats.totalQuantity)}
-                valueStyle={{ color: '#faad14' }}
+                valueStyle={{ color: '#faad14', fontSize: isMobile ? 20 : undefined }}
                 suffix="件"
               />
             </Card>
           </Col>
-          <Col xs={24} sm={6}>
+          <Col xs={12} sm={6}>
             <Card size="small">
               <Statistic
                 title="赠送数量"
                 value={Math.floor(stats.totalGiftQuantity)}
-                valueStyle={{ color: '#f5222d' }}
+                valueStyle={{ color: '#f5222d', fontSize: isMobile ? 20 : undefined }}
                 suffix="件"
               />
             </Card>
@@ -419,91 +439,149 @@ const TransactionList = () => {
         </Row>
       )}
 
-      {/* 筛选器 */}
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={16} align="middle">
-          <Col xs={24} sm={8} md={4}>
-            <Input
-              placeholder="搜索客户名称"
-              prefix={<SearchOutlined />}
-              value={filters.customerName}
-              onChange={(e) => handleFilterChange('customerName', e.target.value)}
-              allowClear
-            />
-          </Col>
-          <Col xs={24} sm={8} md={4}>
+      <div className="txn-filters" style={{ marginBottom: 16 }}>
+        <div className="txn-filters-row">
+          <Input
+            placeholder="搜索客户"
+            prefix={<SearchOutlined />}
+            value={filters.customerName}
+            onChange={(e) => handleFilterChange('customerName', e.target.value)}
+            allowClear
+            className="txn-filters-search"
+          />
+          {isMobile ? (
+            <Button
+              icon={filtersExpanded ? <UpOutlined /> : <FilterOutlined />}
+              onClick={() => setFiltersExpanded(!filtersExpanded)}
+            >
+              筛选
+            </Button>
+          ) : (
+            <Space wrap>
+              <Button type="primary" onClick={handleShowCustomerStats} loading={customerStatsLoading}>
+                客户统计
+              </Button>
+              <Button icon={<ReloadOutlined />} onClick={loadTransactions} loading={loading}>
+                刷新
+              </Button>
+              <Button icon={<FilterOutlined />} onClick={clearFilters}>
+                清空
+              </Button>
+            </Space>
+          )}
+        </div>
+        {(filtersExpanded || !isMobile) && (
+          <div className="txn-filters-expanded">
             <Select
-              placeholder="选择交易类型"
-              value={filters.type}
+              placeholder="交易类型"
+              value={filters.type || undefined}
               onChange={(value) => handleFilterChange('type', value)}
               allowClear
-              style={{ width: '100%' }}
+              style={{ width: isMobile ? '100%' : 160 }}
             >
               {Object.entries(transactionTypes).map(([key, value]) => (
                 <Option key={key} value={key}>{value}</Option>
               ))}
             </Select>
-          </Col>
-          <Col xs={24} sm={8} md={6}>
             <RangePicker
               value={filters.dateRange}
               onChange={(dates) => handleFilterChange('dateRange', dates)}
               format="YYYY-MM-DD"
-              style={{ width: '100%' }}
+              style={{ width: isMobile ? '100%' : undefined }}
             />
-          </Col>
-          <Col xs={24} sm={24} md={4}>
-            <Space>
-              <Button
-                type="primary"
-                onClick={handleShowCustomerStats}
-                loading={customerStatsLoading}
-              >
-                客户统计
-              </Button>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={loadTransactions}
-                loading={loading}
-              >
-                刷新
-              </Button>
-              <Button
-                icon={<FilterOutlined />}
-                onClick={clearFilters}
-              >
-                清空筛选
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+            {isMobile && (
+              <Space wrap style={{ width: '100%' }}>
+                <Button type="primary" onClick={handleShowCustomerStats} loading={customerStatsLoading} block>
+                  客户统计
+                </Button>
+                <Button icon={<ReloadOutlined />} onClick={loadTransactions} loading={loading}>
+                  刷新
+                </Button>
+                <Button icon={<FilterOutlined />} onClick={clearFilters}>
+                  清空
+                </Button>
+              </Space>
+            )}
+          </div>
+        )}
+      </div>
 
-      {/* 交易记录表格 */}
-      <Card>
-        <Table
-          columns={columns}
-          dataSource={transactions}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            ...pagination,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) =>
-              `第 ${range[0]}-${range[1]} 条，共 ${total} 条记录`,
-            onChange: (page, pageSize) => {
-              setPagination(prev => ({
-                ...prev,
-                current: page,
-                pageSize: pageSize
-              }));
-            }
-          }}
-          scroll={{ x: 1200 }}
-          size="small"
-        />
-      </Card>
+      {isMobile ? (
+        <>
+          <List
+            loading={loading}
+            dataSource={paginatedTransactions}
+            renderItem={(item) => (
+              <Card className="merchant-txn-mobile-card txn-mobile-card" size="small">
+                <div className="txn-mobile-card-header">
+                  <span className="txn-mobile-card-title">
+                    {item.customer_name} · {transactionTypes[item.type]}
+                  </span>
+                  <span
+                    className="txn-mobile-card-amount"
+                    style={{ color: item.total_amount >= 0 ? '#1677ff' : '#f5222d' }}
+                  >
+                    {formatCurrency(item.total_amount)}
+                  </span>
+                </div>
+                <div className="txn-mobile-card-meta">
+                  {formatRelativeTime(item.created_at)}
+                  {item.quantity ? ` · ${Math.floor(item.quantity)} 件` : ''}
+                  {item.collector ? ` · ${item.collector}` : ''}
+                </div>
+                <div className="merchant-txn-mobile-actions">
+                  <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(item)}>
+                    编辑
+                  </Button>
+                  <Popconfirm title="确定删除？" onConfirm={() => handleDelete(item.id)} okText="确定" cancelText="取消">
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </div>
+              </Card>
+            )}
+          />
+          {pagination.total > pagination.pageSize && (
+            <Pagination
+              className="txn-pagination"
+              current={pagination.current}
+              pageSize={pagination.pageSize}
+              total={pagination.total}
+              onChange={(page, pageSize) =>
+                setPagination((prev) => ({ ...prev, current: page, pageSize }))
+              }
+              size="small"
+              simple
+            />
+          )}
+        </>
+      ) : (
+        <Card>
+          <Table
+            columns={columns}
+            dataSource={transactions}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              ...pagination,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) =>
+                `第 ${range[0]}-${range[1]} 条，共 ${total} 条记录`,
+              onChange: (page, pageSize) => {
+                setPagination((prev) => ({
+                  ...prev,
+                  current: page,
+                  pageSize: pageSize
+                }));
+              }
+            }}
+            scroll={{ x: 1200 }}
+            size="small"
+          />
+        </Card>
+      )}
 
       <Modal
         title={`客户统计 - ${customerStats.customerName || '-'}`}
