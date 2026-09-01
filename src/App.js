@@ -45,6 +45,25 @@ function App() {
       setUserRole(roleParam);
     }
 
+    // 一次性清除 2026-07-30 清理前的本地离线数据（v1.0.18）
+    const hasClearedV1018 = localStorage.getItem('_data_cleared_v1018');
+    if (!hasClearedV1018) {
+      console.log('检测到 v1.0.18，清除本地离线缓存...');
+      [
+        'localTransactions',
+        'localCustomerBindings',
+        'localEmployeeTransfers',
+        'localMerchantWithdrawals',
+        'localEmployeeBalanceAdjustments',
+        'localTransactionRequests',
+        'localSalaryRecords',
+        'localSalaryAdjustments',
+        'localBonusDeductions'
+      ].forEach((key) => localStorage.removeItem(key));
+      localStorage.setItem('_data_cleared_v1018', 'true');
+      console.log('本地离线数据已清除');
+    }
+
     // 一次性清除旧的 localStorage 数据（临时代码）
     const hasCleared = localStorage.getItem('_data_cleared_v1');
     if (!hasCleared) {

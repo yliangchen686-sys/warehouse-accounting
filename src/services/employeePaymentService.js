@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { authService } from './authService';
 import { withdrawalService } from './withdrawalService';
+import { OPENING_BALANCE_ADJUSTMENTS } from '../config/openingBalanceAdjustments';
 
 /**
  * 规范化员工名：去除首尾空格、全角转半角，用于转账/提现记录匹配
@@ -22,6 +23,10 @@ function getTransferEmployeeName(record) {
 }
 function getWithdrawalMerchantName(record) {
   return record.merchant_name ?? record.merchantName ?? '';
+}
+
+function isOpeningBalanceTransaction(transaction) {
+  return (transaction.customer_name || '').includes('【期初结转】');
 }
 
 class EmployeePaymentService {
@@ -55,7 +60,8 @@ class EmployeePaymentService {
 
       // 合并数据库和本地存储的数据
       const localTransactions = JSON.parse(localStorage.getItem('localTransactions') || '[]');
-      allTransactions = [...allTransactions, ...localTransactions];
+      allTransactions = [...allTransactions, ...localTransactions]
+        .filter((transaction) => !isOpeningBalanceTransaction(transaction));
 
       // 应用日期筛选
       if (filters.startDate || filters.endDate) {
@@ -126,10 +132,14 @@ class EmployeePaymentService {
         const employeeAdjustments = balanceAdjustments.filter(
           a => normalizeEmployeeName(a.employee_name ?? a.employeeName) === normName
         );
-        const totalAdjustments = employeeAdjustments.reduce(
+        let totalAdjustments = employeeAdjustments.reduce(
           (sum, a) => sum + (parseFloat(a.amount) || 0),
           0
         );
+        const openingAdjustment = OPENING_BALANCE_ADJUSTMENTS[employeeName]
+          ?? OPENING_BALANCE_ADJUSTMENTS[normName]
+          ?? 0;
+        totalAdjustments += openingAdjustment;
         
         // 获取员工角色信息来判断是否为管理员或商人
         const isAdmin = employeeName === '管理员' || employeeName === '系统管理员';

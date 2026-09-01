@@ -3,6 +3,10 @@ import { authService } from './authService';
 import { withdrawalService } from './withdrawalService';
 import { inventoryService } from './inventoryService';
 
+function isOpeningBalanceTransaction(transaction) {
+  return (transaction.customer_name || '').includes('【期初结转】');
+}
+
 class TransactionService {
   // 创建交易记录（仅商人或管理员可用）
   async createTransaction(transactionData) {
@@ -390,8 +394,9 @@ class TransactionService {
         const quantity = parseFloat(transaction.quantity) || 0;
         const giftQuantity = parseFloat(transaction.gift_quantity) || 0;
         const totalAmount = parseFloat(transaction.total_amount) || 0;
+        const isOpening = isOpeningBalanceTransaction(transaction);
 
-        // 修改总金额计算逻辑：销售金额 - 回收金额
+        // 修改总金额计算逻辑：销售金额 - 回收金额（期初净收入计入）
         switch (transaction.type) {
           case 'sale':     // 销售：增加总金额
             stats.totalAmount += totalAmount;
@@ -405,18 +410,18 @@ class TransactionService {
             break;
         }
 
-        // 总数量只计算销售数量
-        if (transaction.type === 'sale') {
+        // 总数量只计算销售数量（期初结转除外）
+        if (transaction.type === 'sale' && !isOpening) {
           stats.totalQuantity += quantity;
         }
         
-        // 赠送数量只计算销售和赠送类型的赠送数量
-        if (transaction.type === 'sale' || transaction.type === 'gift') {
+        // 赠送数量（期初结转除外）
+        if (!isOpening && (transaction.type === 'sale' || transaction.type === 'gift')) {
           stats.totalGiftQuantity += giftQuantity;
         }
 
         const type = transaction.type;
-        if (stats.typeStats[type]) {
+        if (stats.typeStats[type] && !isOpening) {
           stats.typeStats[type].count++;
           stats.typeStats[type].amount += totalAmount;
           stats.typeStats[type].quantity += quantity;

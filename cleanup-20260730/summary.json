@@ -1,0 +1,32 @@
+{
+  "cutoff": "2026-07-30T00:00:00+07:00",
+  "totalBalanceBefore": 99413,
+  "targetBalance": 99413,
+  "balanceMatch": true,
+  "deleteCounts": {
+    "transactions": 15494,
+    "transactionsKeep": 1929,
+    "transfers": 157,
+    "withdrawals": 237,
+    "bindings": 802,
+    "bindingsKeep": 82,
+    "requests": 8,
+    "gifts": 40,
+    "bonusDeductions": 1
+  },
+  "stock": {
+    "before": 5845,
+    "afterDelete": 1159,
+    "openingPurchaseQty": 4686,
+    "target": 5845
+  },
+  "netIncome": {
+    "before": 99413,
+    "afterDelete": -58430,
+    "openingSaleAmount": 157843,
+    "target": 99413
+  },
+  "salesQtyAfter": 29561,
+  "giftQtyAfter": 3251,
+  "employeeCount": 11
+}
