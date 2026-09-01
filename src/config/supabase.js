@@ -4,7 +4,14 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://ztyvmtawslpmjqffbmtp.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0eXZtdGF3c2xwbWpxZmZibXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NTg0NjAsImV4cCI6MjA3NDAzNDQ2MH0.XY-fszdxHZFmMohKhP7q_pEBj1L7TRceldZ3-mu3Dl4';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// 本系统用 employees 表自行校验密码，不需要 Supabase Auth 会话
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
+  }
+});
 
 // 数据库表结构和 RLS 策略的 SQL 脚本
 export const databaseSchema = `

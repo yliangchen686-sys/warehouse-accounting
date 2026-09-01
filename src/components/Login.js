@@ -23,7 +23,12 @@ const Login = ({ onLogin, userRole }) => {
       
       onLogin(user);
     } catch (error) {
-      message.error(error.message || '登录失败，请检查用户名和密码');
+      const errorText = error.message || '登录失败，请检查用户名和密码';
+      if (errorText.includes('Failed to fetch') || errorText.includes('fetch failed')) {
+        message.error('无法连接云端服务器，请检查网络后重试');
+      } else {
+        message.error(errorText);
+      }
     } finally {
       setLoading(false);
     }

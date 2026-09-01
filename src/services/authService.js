@@ -1,93 +1,133 @@
 import { supabase } from '../config/supabase';
 
+const DEFAULT_ACCOUNTS = {
+  admin: {
+    id: 1,
+    name: '管理员',
+    username: 'admin',
+    password: 'admin123',
+    role: 'manager'
+  },
+  employee1: {
+    id: 2,
+    name: '测试员工',
+    username: 'employee1',
+    password: 'employee123',
+    role: 'employee'
+  }
+};
+
+const BCRYPT_PASSWORD_MAP = {
+  '$2a$10$N9qo8uLOickgx2ZMRZoMye.5xCGwJzCG3.8l7iJzG5P3g8OYzJq1u': 'admin123',
+  '$2a$10$rZ8kK9Q9.Yx8xYxYxYxYxOxYxYxYxYxYxYxYxYxYxYxYxYxYxYxYxY': 'employee123'
+};
+
 class AuthService {
   constructor() {
     this.currentUser = null;
   }
 
+  isNetworkError(error) {
+    if (!error) {
+      return false;
+    }
+    const message = [
+      error.message,
+      error.details,
+      error.hint,
+      error.code
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return (
+      message.includes('fetch failed') ||
+      message.includes('failed to fetch') ||
+      message.includes('network') ||
+      message.includes('auth.supabase.io')
+    );
+  }
+
+  verifyPassword(storedPassword, inputPassword) {
+    if (!storedPassword) {
+      return false;
+    }
+
+    if (storedPassword.startsWith('$2a$')) {
+      return BCRYPT_PASSWORD_MAP[storedPassword] === inputPassword;
+    }
+
+    return storedPassword === inputPassword;
+  }
+
+  buildCurrentUser(user) {
+    return {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      role: user.role
+    };
+  }
+
+  saveCurrentUser(user) {
+    this.currentUser = user;
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    return user;
+  }
+
+  loginWithOfflineAccounts(username, password) {
+    const localEmployees = JSON.parse(localStorage.getItem('localEmployees') || '[]');
+    const localUser = localEmployees.find(
+      (employee) => employee.username === username && employee.status === 'active'
+    );
+
+    if (localUser && this.verifyPassword(localUser.password, password)) {
+      return this.saveCurrentUser(this.buildCurrentUser(localUser));
+    }
+
+    const defaultUser = DEFAULT_ACCOUNTS[username];
+    if (defaultUser && defaultUser.password === password) {
+      return this.saveCurrentUser(this.buildCurrentUser(defaultUser));
+    }
+
+    return null;
+  }
+
   // 登录
   async login(username, password) {
+    let users = null;
+    let dbError = null;
+
     try {
-      // 首先尝试从数据库获取用户信息
-      const { data: users, error } = await supabase
+      const { data, error } = await supabase
         .from('employees')
         .select('*')
         .eq('username', username)
         .eq('status', 'active')
         .single();
 
-      // 如果数据库中没有找到用户，使用临时的默认账户
-      if (error || !users) {
-        // 临时默认账户，用于测试
-        const defaultAccounts = {
-          'admin': { 
-            id: 1, 
-            name: '管理员', 
-            username: 'admin', 
-            password: 'admin123', 
-            role: 'manager' 
-          },
-          'employee1': { 
-            id: 2, 
-            name: '测试员工', 
-            username: 'employee1', 
-            password: 'employee123', 
-            role: 'employee' 
-          }
-        };
+      dbError = error;
+      users = data;
+    } catch (error) {
+      dbError = error;
+    }
 
-        const user = defaultAccounts[username];
-        if (!user || user.password !== password) {
-          throw new Error('用户名或密码错误');
-        }
-
-        // 设置当前用户
-        this.currentUser = {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          role: user.role
-        };
-
-        // 保存到本地存储
-        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
-        return this.currentUser;
-      }
-
-      // 如果从数据库找到了用户，进行密码验证
-      let isPasswordValid = false;
-      if (users.password.startsWith('$2a$')) {
-        // 如果是 bcrypt 加密的密码，我们需要特殊处理
-        const passwordMap = {
-          '$2a$10$N9qo8uLOickgx2ZMRZoMye.5xCGwJzCG3.8l7iJzG5P3g8OYzJq1u': 'admin123',
-          '$2a$10$rZ8kK9Q9.Yx8xYxYxYxYxOxYxYxYxYxYxYxYxYxYxYxYxYxYxYxYxY': 'employee123'
-        };
-        isPasswordValid = passwordMap[users.password] === password;
-      } else {
-        // 明文密码比较
-        isPasswordValid = users.password === password;
-      }
-      
-      if (!isPasswordValid) {
+    if (!dbError && users) {
+      if (!this.verifyPassword(users.password, password)) {
         throw new Error('用户名或密码错误');
       }
 
-      // 设置当前用户
-      this.currentUser = {
-        id: users.id,
-        name: users.name,
-        username: users.username,
-        role: users.role
-      };
-
-      // 保存到本地存储
-      localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
-
-      return this.currentUser;
-    } catch (error) {
-      console.error('登录失败:', error);
-      throw error;
+      return this.saveCurrentUser(this.buildCurrentUser(users));
     }
+
+    const offlineUser = this.loginWithOfflineAccounts(username, password);
+    if (offlineUser) {
+      return offlineUser;
+    }
+
+    if (this.isNetworkError(dbError)) {
+      throw new Error('无法连接云端服务器，请检查网络或稍后再试');
+    }
+
+    throw new Error('用户名或密码错误');
   }
 
   // 登出
